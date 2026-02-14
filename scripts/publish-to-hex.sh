@@ -4,7 +4,8 @@ set -euo pipefail
 # Publish faber_tweann to hex.pm
 # Usage: ./scripts/publish-to-hex.sh
 #
-# Requires: ~/.config/rebar3/hex.config (run `rebar3 hex user auth` to set up)
+# Requires: ~/.config/rebar3/hex.config with api_key set
+# (run `rebar3 hex user auth` to set up, or set api_key directly)
 
 cd "$(dirname "$0")/.."
 
@@ -21,7 +22,7 @@ echo "==> Building docs..."
 rebar3 ex_doc
 
 echo "==> Publishing to hex.pm..."
-rebar3 hex publish
+rebar3 hex publish --yes
 
 echo "==> Done! faber_tweann v${VERSION} published to hex.pm"
 echo "==> View at: https://hex.pm/packages/faber_tweann"
