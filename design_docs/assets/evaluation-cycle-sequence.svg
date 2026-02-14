@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1000" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="500" y="30" text-anchor="middle" font-size="20" font-weight="bold">Evaluation Cycle Sequence</text>
+  <text x="500" y="50" text-anchor="middle" font-size="12" fill="#666">Single evaluation cycle through the neural network</text>
+
+  <!-- Participants -->
+  <rect x="50" y="80" width="100" height="40" fill="#9333ea" stroke="#6b21a8" stroke-width="2" rx="5"/>
+  <text x="100" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Exoself</text>
+
+  <rect x="220" y="80" width="100" height="40" fill="#16a34a" stroke="#15803d" stroke-width="2" rx="5"/>
+  <text x="270" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Cortex</text>
+
+  <rect x="390" y="80" width="100" height="40" fill="#0891b2" stroke="#0e7490" stroke-width="2" rx="5"/>
+  <text x="440" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Sensor</text>
+
+  <rect x="560" y="80" width="100" height="40" fill="#2563eb" stroke="#1d4ed8" stroke-width="2" rx="5"/>
+  <text x="610" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Neuron</text>
+
+  <rect x="730" y="80" width="100" height="40" fill="#7c3aed" stroke="#6d28d9" stroke-width="2" rx="5"/>
+  <text x="780" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Actuator</text>
+
+  <rect x="900" y="80" width="80" height="40" fill="#64748b" stroke="#475569" stroke-width="2" rx="5"/>
+  <text x="940" y="105" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Scape</text>
+
+  <!-- Lifelines -->
+  <line x1="100" y1="120" x2="100" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="270" y1="120" x2="270" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="440" y1="120" x2="440" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="610" y1="120" x2="610" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="780" y1="120" x2="780" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="940" y1="120" x2="940" y2="750" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- Sequence -->
+  <!-- 1. Exoself starts evaluation -->
+  <line x1="100" y1="160" x2="270" y2="160" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="185" y="155" text-anchor="middle" font-size="10">1. sync</text>
+
+  <!-- 2. Cortex to Sensors -->
+  <rect x="265" y="180" width="10" height="120" fill="#16a34a" opacity="0.3"/>
+  <line x1="270" y1="200" x2="440" y2="200" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="355" y="195" text-anchor="middle" font-size="10">2. {cortex, sync}</text>
+
+  <!-- 3. Sensor reads from Scape -->
+  <rect x="435" y="220" width="10" height="60" fill="#0891b2" opacity="0.3"/>
+  <line x1="440" y1="240" x2="940" y2="240" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="690" y="235" text-anchor="middle" font-size="10">3. sense()</text>
+
+  <line x1="940" y1="260" x2="440" y2="260" stroke="#333" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)"/>
+  <text x="690" y="255" text-anchor="middle" font-size="10">sensory_signal</text>
+
+  <!-- 4. Sensor to Neurons -->
+  <line x1="440" y1="300" x2="610" y2="300" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="525" y="295" text-anchor="middle" font-size="10">4. {forward, Signal}</text>
+
+  <!-- 5. Neuron processing -->
+  <rect x="605" y="320" width="10" height="140" fill="#2563eb" opacity="0.3"/>
+  <text x="520" y="345" font-size="9" fill="#64748b">Waits for all inputs</text>
+  <text x="520" y="365" font-size="9" fill="#64748b">Aggregates signals</text>
+  <text x="520" y="385" font-size="9" fill="#64748b">Applies activation function</text>
+
+  <!-- 6. Neuron to next layer/Actuator -->
+  <line x1="610" y1="480" x2="780" y2="480" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="695" y="475" text-anchor="middle" font-size="10">5. {forward, Output}</text>
+
+  <!-- 7. Actuator collects outputs -->
+  <rect x="775" y="500" width="10" height="100" fill="#7c3aed" opacity="0.3"/>
+  <text x="700" y="525" font-size="9" fill="#64748b">Collects fanin signals</text>
+
+  <!-- 8. Actuator to Scape -->
+  <line x1="780" y1="560" x2="940" y2="560" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="860" y="555" text-anchor="middle" font-size="10">6. act(Output)</text>
+
+  <line x1="940" y1="580" x2="780" y2="580" stroke="#333" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowhead)"/>
+  <text x="860" y="575" text-anchor="middle" font-size="10">fitness</text>
+
+  <!-- 9. Actuator to Cortex -->
+  <line x1="780" y1="620" x2="270" y2="620" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="525" y="615" text-anchor="middle" font-size="10">7. {actuator_output, Fitness}</text>
+
+  <!-- 10. Cortex aggregates -->
+  <text x="180" y="655" font-size="9" fill="#64748b">Waits for all actuators</text>
+  <text x="180" y="675" font-size="9" fill="#64748b">Aggregates fitness</text>
+
+  <!-- 11. Cortex to Exoself -->
+  <line x1="270" y1="710" x2="100" y2="710" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="185" y="705" text-anchor="middle" font-size="10">8. {evaluation_complete, Fitness}</text>
+
+  <!-- Notes -->
+  <rect x="20" y="600" width="130" height="80" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" rx="3"/>
+  <text x="85" y="620" text-anchor="middle" font-size="10" font-weight="bold">Timeouts:</text>
+  <text x="30" y="640" font-size="9">Cortex: 30s</text>
+  <text x="30" y="658" font-size="9">Neuron: 10s</text>
+  <text x="30" y="676" font-size="9">(configurable)</text>
+
+  <rect x="850" y="640" width="130" height="60" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+  <text x="915" y="660" text-anchor="middle" font-size="10" font-weight="bold">Next Cycle:</text>
+  <text x="860" y="678" font-size="9">Cortex triggers</text>
+  <text x="860" y="694" font-size="9">again or terminates</text>
+
+  <!-- Phase labels -->
+  <rect x="10" y="190" width="50" height="20" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="35" y="205" text-anchor="middle" font-size="9" font-weight="bold">SENSE</text>
+
+  <rect x="10" y="320" width="50" height="20" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+  <text x="35" y="335" text-anchor="middle" font-size="9" font-weight="bold">THINK</text>
+
+  <rect x="10" y="500" width="50" height="20" fill="#f3e8ff" stroke="#9333ea" stroke-width="1" rx="3"/>
+  <text x="35" y="515" text-anchor="middle" font-size="9" font-weight="bold">ACT</text>
+</svg>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="20" font-weight="bold">Module Dependencies</text>
+  <text x="400" y="50" text-anchor="middle" font-size="12" fill="#666">faber-tweann v0.8.0</text>
+
+  <!-- Core Layer -->
+  <text x="50" y="90" font-size="14" font-weight="bold" fill="#2563eb">Core Data</text>
+  <rect x="50" y="100" width="120" height="40" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="5"/>
+  <text x="110" y="125" text-anchor="middle" font-size="12">genotype</text>
+
+  <rect x="190" y="100" width="120" height="40" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="5"/>
+  <text x="250" y="125" text-anchor="middle" font-size="12">morphology</text>
+
+  <!-- Network Layer -->
+  <text x="50" y="180" font-size="14" font-weight="bold" fill="#16a34a">Network Components</text>
+  <rect x="50" y="190" width="100" height="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2" rx="5"/>
+  <text x="100" y="215" text-anchor="middle" font-size="12">cortex</text>
+
+  <rect x="170" y="190" width="100" height="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2" rx="5"/>
+  <text x="220" y="215" text-anchor="middle" font-size="12">sensor</text>
+
+  <rect x="290" y="190" width="100" height="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2" rx="5"/>
+  <text x="340" y="215" text-anchor="middle" font-size="12">neuron</text>
+
+  <rect x="410" y="190" width="100" height="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2" rx="5"/>
+  <text x="460" y="215" text-anchor="middle" font-size="12">actuator</text>
+
+  <!-- Construction Layer -->
+  <text x="50" y="270" font-size="14" font-weight="bold" fill="#9333ea">Construction</text>
+  <rect x="50" y="280" width="120" height="40" fill="#f3e8ff" stroke="#9333ea" stroke-width="2" rx="5"/>
+  <text x="110" y="305" text-anchor="middle" font-size="12">constructor</text>
+
+  <rect x="190" y="280" width="120" height="40" fill="#f3e8ff" stroke="#9333ea" stroke-width="2" rx="5"/>
+  <text x="250" y="305" text-anchor="middle" font-size="12">exoself</text>
+
+  <!-- Evolution Layer -->
+  <text x="50" y="360" font-size="14" font-weight="bold" fill="#dc2626">Evolution</text>
+  <rect x="50" y="370" width="140" height="40" fill="#fee2e2" stroke="#dc2626" stroke-width="2" rx="5"/>
+  <text x="120" y="395" text-anchor="middle" font-size="12">genome_mutator</text>
+
+  <rect x="210" y="370" width="140" height="40" fill="#fee2e2" stroke="#dc2626" stroke-width="2" rx="5"/>
+  <text x="280" y="395" text-anchor="middle" font-size="12">crossover</text>
+
+  <rect x="370" y="370" width="140" height="40" fill="#fee2e2" stroke="#dc2626" stroke-width="2" rx="5"/>
+  <text x="440" y="395" text-anchor="middle" font-size="12">selection_algorithm</text>
+
+  <!-- Population Layer -->
+  <text x="50" y="450" font-size="14" font-weight="bold" fill="#ea580c">Population</text>
+  <rect x="50" y="460" width="160" height="40" fill="#ffedd5" stroke="#ea580c" stroke-width="2" rx="5"/>
+  <text x="130" y="485" text-anchor="middle" font-size="12">population_monitor</text>
+
+  <rect x="230" y="460" width="160" height="40" fill="#ffedd5" stroke="#ea580c" stroke-width="2" rx="5"/>
+  <text x="310" y="485" text-anchor="middle" font-size="12">species_identifier</text>
+
+  <rect x="410" y="460" width="160" height="40" fill="#ffedd5" stroke="#ea580c" stroke-width="2" rx="5"/>
+  <text x="490" y="485" text-anchor="middle" font-size="12">fitness_postprocessor</text>
+
+  <!-- Utilities Layer -->
+  <text x="600" y="90" font-size="14" font-weight="bold" fill="#64748b">Utilities</text>
+  <rect x="600" y="100" width="150" height="40" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="5"/>
+  <text x="675" y="125" text-anchor="middle" font-size="12">tweann_logger</text>
+
+  <rect x="600" y="150" width="150" height="40" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="5"/>
+  <text x="675" y="175" text-anchor="middle" font-size="12">functions</text>
+
+  <rect x="600" y="200" width="150" height="40" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="5"/>
+  <text x="675" y="225" text-anchor="middle" font-size="12">signal_aggregator</text>
+
+  <rect x="600" y="250" width="150" height="40" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="5"/>
+  <text x="675" y="275" text-anchor="middle" font-size="12">perturbation_utils</text>
+
+  <rect x="600" y="300" width="150" height="40" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="5"/>
+  <text x="675" y="325" text-anchor="middle" font-size="12">selection_utils</text>
+
+  <!-- Dependencies (arrows) -->
+  <!-- Network -> Genotype -->
+  <line x1="100" y1="190" x2="110" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="220" y1="190" x2="160" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="340" y1="190" x2="160" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="460" y1="190" x2="160" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Constructor -> Network -->
+  <line x1="110" y1="280" x2="100" y2="230" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="110" y1="280" x2="220" y2="230" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="110" y1="280" x2="340" y2="230" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Exoself -> Constructor -->
+  <line x1="190" y1="300" x2="170" y2="300" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Evolution -> Genotype -->
+  <line x1="120" y1="370" x2="110" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="280" y1="370" x2="150" y2="140" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Population -> Evolution -->
+  <line x1="130" y1="460" x2="120" y2="410" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <line x1="130" y1="460" x2="280" y2="410" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Population -> Exoself -->
+  <line x1="130" y1="460" x2="250" y2="320" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+  <!-- Network -> Utilities -->
+  <line x1="340" y1="210" x2="600" y2="225" stroke="#333" stroke-width="1" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+  <line x1="340" y1="210" x2="600" y2="175" stroke="#333" stroke-width="1" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+
+  <!-- Legend -->
+  <text x="50" y="540" font-size="12" font-weight="bold">Legend:</text>
+  <line x1="50" y1="555" x2="100" y2="555" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+  <text x="110" y="560" font-size="11">Strong dependency</text>
+
+  <line x1="250" y1="555" x2="300" y2="555" stroke="#333" stroke-width="1" stroke-dasharray="5,5" marker-end="url(#arrowhead)"/>
+  <text x="310" y="560" font-size="11">Utility/helper usage</text>
+</svg>

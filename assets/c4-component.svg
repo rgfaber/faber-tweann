@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #333; }
+      .component-box { fill: #85bbf0; stroke: #5d82a8; stroke-width: 2; }
+      .container-box { fill: #1168bd; stroke: #0b4884; stroke-width: 2; }
+      .label { font: bold 13px sans-serif; fill: #333; text-anchor: middle; }
+      .tech { font: italic 10px sans-serif; fill: #333; text-anchor: middle; }
+      .desc { font: 10px sans-serif; fill: #333; text-anchor: middle; }
+      .arrow { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font: 10px sans-serif; fill: #666; text-anchor: middle; }
+      .system-boundary { fill: none; stroke: #999; stroke-width: 2; stroke-dasharray: 5,5; }
+      .boundary-label { font: bold 14px sans-serif; fill: #666; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="550" y="30" class="title">Component Diagram - Evolution System</text>
+  <text x="550" y="50" class="desc" style="fill: #666;">Detailed view of evolutionary components</text>
+
+  <!-- System Boundary -->
+  <rect x="40" y="80" width="1020" height="770" rx="5" class="system-boundary"/>
+  <text x="60" y="105" class="boundary-label">Evolution System [Container]</text>
+
+  <!-- Row 1: Core Data -->
+  <rect x="70" y="130" width="150" height="90" rx="3" class="component-box"/>
+  <text x="145" y="160" class="label">Genotype</text>
+  <text x="145" y="175" class="tech">[Module]</text>
+  <text x="145" y="195" class="desc">CRUD operations</text>
+  <text x="145" y="207" class="desc">for genotypes</text>
+
+  <rect x="250" y="130" width="150" height="90" rx="3" class="component-box"/>
+  <text x="325" y="160" class="label">Morphology</text>
+  <text x="325" y="175" class="tech">[Module]</text>
+  <text x="325" y="195" class="desc">Problem definitions,</text>
+  <text x="325" y="207" class="desc">sensor/actuator specs</text>
+
+  <rect x="430" y="130" width="150" height="90" rx="3" class="component-box"/>
+  <text x="505" y="160" class="label">Records</text>
+  <text x="505" y="175" class="tech">[Header File]</text>
+  <text x="505" y="195" class="desc">Type definitions:</text>
+  <text x="505" y="207" class="desc">agent, neuron, etc.</text>
+
+  <!-- Row 2: Construction -->
+  <rect x="70" y="260" width="150" height="90" rx="3" class="component-box"/>
+  <text x="145" y="290" class="label">Constructor</text>
+  <text x="145" y="305" class="tech">[Module]</text>
+  <text x="145" y="325" class="desc">Builds phenotypes</text>
+  <text x="145" y="337" class="desc">from genotypes</text>
+
+  <rect x="250" y="260" width="150" height="90" rx="3" class="component-box"/>
+  <text x="325" y="290" class="label">Exoself</text>
+  <text x="325" y="305" class="tech">[Module]</text>
+  <text x="325" y="325" class="desc">Agent coordinator,</text>
+  <text x="325" y="337" class="desc">evaluation manager</text>
+
+  <!-- Row 3: Network Components -->
+  <rect x="70" y="390" width="150" height="90" rx="3" class="component-box"/>
+  <text x="145" y="420" class="label">Cortex</text>
+  <text x="145" y="435" class="tech">[gen_server]</text>
+  <text x="145" y="455" class="desc">Network controller,</text>
+  <text x="145" y="467" class="desc">sync coordinator</text>
+
+  <rect x="250" y="390" width="150" height="90" rx="3" class="component-box"/>
+  <text x="325" y="420" class="label">Sensor</text>
+  <text x="325" y="435" class="tech">[Process]</text>
+  <text x="325" y="455" class="desc">Input reading,</text>
+  <text x="325" y="467" class="desc">signal generation</text>
+
+  <rect x="430" y="390" width="150" height="90" rx="3" class="component-box"/>
+  <text x="505" y="420" class="label">Neuron</text>
+  <text x="505" y="435" class="tech">[Process]</text>
+  <text x="505" y="455" class="desc">Signal processing,</text>
+  <text x="505" y="467" class="desc">activation functions</text>
+
+  <rect x="610" y="390" width="150" height="90" rx="3" class="component-box"/>
+  <text x="685" y="420" class="label">Actuator</text>
+  <text x="685" y="435" class="tech">[Process]</text>
+  <text x="685" y="455" class="desc">Output generation,</text>
+  <text x="685" y="467" class="desc">action execution</text>
+
+  <!-- Row 4: Evolution Operators -->
+  <rect x="70" y="520" width="150" height="90" rx="3" class="component-box"/>
+  <text x="145" y="550" class="label">Genome Mutator</text>
+  <text x="145" y="565" class="tech">[Module]</text>
+  <text x="145" y="585" class="desc">Topology mutations:</text>
+  <text x="145" y="597" class="desc">add/remove nodes</text>
+
+  <rect x="250" y="520" width="150" height="90" rx="3" class="component-box"/>
+  <text x="325" y="550" class="label">Crossover</text>
+  <text x="325" y="565" class="tech">[Module]</text>
+  <text x="325" y="585" class="desc">Sexual reproduction,</text>
+  <text x="325" y="597" class="desc">gene recombination</text>
+
+  <rect x="430" y="520" width="150" height="90" rx="3" class="component-box"/>
+  <text x="505" y="550" class="label">Perturbation Utils</text>
+  <text x="505" y="565" class="tech">[Module]</text>
+  <text x="505" y="585" class="desc">Weight mutations,</text>
+  <text x="505" y="597" class="desc">parameter tuning</text>
+
+  <!-- Row 5: Population Management -->
+  <rect x="70" y="650" width="150" height="90" rx="3" class="component-box"/>
+  <text x="145" y="680" class="label">Population Monitor</text>
+  <text x="145" y="695" class="tech">[gen_server]</text>
+  <text x="145" y="715" class="desc">Evolution loop,</text>
+  <text x="145" y="727" class="desc">lifecycle management</text>
+
+  <rect x="250" y="650" width="150" height="90" rx="3" class="component-box"/>
+  <text x="325" y="680" class="label">Selection Algorithm</text>
+  <text x="325" y="695" class="tech">[Module]</text>
+  <text x="325" y="715" class="desc">Survivor selection,</text>
+  <text x="325" y="727" class="desc">fitness-based ranking</text>
+
+  <rect x="430" y="650" width="150" height="90" rx="3" class="component-box"/>
+  <text x="505" y="680" class="label">Species Identifier</text>
+  <text x="505" y="695" class="tech">[Module]</text>
+  <text x="505" y="715" class="desc">Speciation,</text>
+  <text x="505" y="727" class="desc">diversity preservation</text>
+
+  <rect x="610" y="650" width="150" height="90" rx="3" class="component-box"/>
+  <text x="685" y="680" class="label">Fitness Postprocessor</text>
+  <text x="685" y="695" class="tech">[Module]</text>
+  <text x="685" y="715" class="desc">Multi-objective,</text>
+  <text x="685" y="727" class="desc">Pareto optimization</text>
+
+  <!-- Row 6: Utilities -->
+  <rect x="790" y="130" width="140" height="90" rx="3" class="component-box"/>
+  <text x="860" y="160" class="label">Functions</text>
+  <text x="860" y="175" class="tech">[Module]</text>
+  <text x="860" y="195" class="desc">Activation functions,</text>
+  <text x="860" y="207" class="desc">math utilities</text>
+
+  <rect x="790" y="260" width="140" height="90" rx="3" class="component-box"/>
+  <text x="860" y="290" class="label">Signal Aggregator</text>
+  <text x="860" y="305" class="tech">[Module]</text>
+  <text x="860" y="325" class="desc">Dot product,</text>
+  <text x="860" y="337" class="desc">signal combination</text>
+
+  <rect x="790" y="390" width="140" height="90" rx="3" class="component-box"/>
+  <text x="860" y="420" class="label">Selection Utils</text>
+  <text x="860" y="435" class="tech">[Module]</text>
+  <text x="860" y="455" class="desc">Roulette wheel,</text>
+  <text x="860" y="467" class="desc">weighted selection</text>
+
+  <rect x="790" y="520" width="140" height="90" rx="3" class="component-box"/>
+  <text x="860" y="550" class="label">TWEANN Logger</text>
+  <text x="860" y="565" class="tech">[Module]</text>
+  <text x="860" y="585" class="desc">Structured logging,</text>
+  <text x="860" y="597" class="desc">debugging output</text>
+
+  <!-- External: Mnesia -->
+  <rect x="250" y="760" width="150" height="70" rx="3" class="container-box"/>
+  <text x="325" y="785" class="label" style="fill: white;">Mnesia</text>
+  <text x="325" y="800" class="tech" style="fill: white;">[Database]</text>
+  <text x="325" y="817" class="desc" style="fill: white;">Persistent storage</text>
+
+  <!-- Key relationships -->
+  <!-- Genotype -> Mnesia -->
+  <path d="M 145 220 L 145 760" class="arrow"/>
+
+  <!-- Constructor -> Genotype -->
+  <path d="M 145 260 L 145 220" class="arrow"/>
+
+  <!-- Constructor -> Network Components -->
+  <path d="M 145 350 L 145 390" class="arrow"/>
+  <path d="M 180 350 L 325 390" class="arrow"/>
+  <path d="M 200 350 L 505 390" class="arrow"/>
+  <path d="M 210 350 L 685 390" class="arrow"/>
+
+  <!-- Network -> Exoself -->
+  <path d="M 325 390 L 325 350" class="arrow"/>
+
+  <!-- Population Monitor -> Evolution Operators -->
+  <path d="M 145 650 L 145 610" class="arrow"/>
+  <path d="M 160 650 L 325 610" class="arrow"/>
+  <path d="M 180 650 L 505 610" class="arrow"/>
+
+  <!-- Evolution Operators -> Genotype -->
+  <path d="M 145 520 L 145 220" class="arrow"/>
+
+  <!-- Neuron -> Functions -->
+  <path d="M 580 435 L 790 175" class="arrow"/>
+
+  <!-- Neuron -> Signal Aggregator -->
+  <path d="M 580 435 L 790 305" class="arrow"/>
+</svg>

@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .attacker { fill: #e74c3c; stroke: #c0392b; stroke-width: 2; }
+      .defender { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .evolution-path { stroke: #95a5a6; stroke-width: 3; fill: none; }
+      .breakthrough { stroke: #f39c12; stroke-width: 4; fill: none; stroke-dasharray: 8,4; }
+      .counter { stroke: #3498db; stroke-width: 4; fill: none; stroke-dasharray: 8,4; }
+      .timeline { stroke: #2c3e50; stroke-width: 2; fill: none; }
+      .fitness-line-attack { stroke: #e74c3c; stroke-width: 2; fill: none; }
+      .fitness-line-defend { stroke: #27ae60; stroke-width: 2; fill: none; }
+    </style>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#95a5a6" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#f39c12" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#3498db" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="500" y="30" text-anchor="middle" class="title">AI Arms Race: Co-Evolutionary Dynamics</text>
+  <text x="500" y="50" text-anchor="middle" class="subtitle">Attack Drones vs Counter-Drone Systems (TWEANN Evolution)</text>
+
+  <!-- Timeline -->
+  <line x1="100" y1="350" x2="900" y2="350" class="timeline"/>
+  <text x="100" y="370" text-anchor="middle" class="small-label">T0</text>
+  <text x="300" y="370" text-anchor="middle" class="small-label">T1</text>
+  <text x="500" y="370" text-anchor="middle" class="small-label">T2</text>
+  <text x="700" y="370" text-anchor="middle" class="small-label">T3</text>
+  <text x="900" y="370" text-anchor="middle" class="small-label">T4</text>
+
+  <!-- Y-axis labels -->
+  <text x="50" y="100" class="small-label">High</text>
+  <text x="35" y="200" class="small-label">Capability</text>
+  <text x="50" y="600" class="small-label">Low</text>
+
+  <!-- ATTACKER EVOLUTION PATH (RED) -->
+  <g id="attacker-path">
+    <!-- T0: Basic Commercial Drones -->
+    <g transform="translate(100, 500)">
+      <circle cx="0" cy="0" r="20" class="attacker" opacity="0.3"/>
+      <text x="0" y="-30" text-anchor="middle" class="small-label" fill="#e74c3c">Gen 1: Commercial</text>
+      <text x="0" y="40" text-anchor="middle" class="small-label">DJI drones</text>
+      <text x="0" y="52" text-anchor="middle" class="small-label">No evasion</text>
+    </g>
+
+    <!-- T1: Swarm Coordination -->
+    <g transform="translate(300, 400)">
+      <circle cx="0" cy="0" r="20" class="attacker" opacity="0.5"/>
+      <text x="0" y="-30" text-anchor="middle" class="small-label" fill="#e74c3c">Gen 2: Swarms</text>
+      <text x="0" y="40" text-anchor="middle" class="small-label">Basic coordination</text>
+      <text x="0" y="52" text-anchor="middle" class="small-label">Mesh comms</text>
+    </g>
+
+    <!-- T2: AI-Guided Evasion -->
+    <g transform="translate(500, 280)">
+      <circle cx="0" cy="0" r="20" class="attacker" opacity="0.7"/>
+      <text x="0" y="-30" text-anchor="middle" class="small-label" fill="#e74c3c">Gen 3: AI Evasion</text>
+      <text x="0" y="40" text-anchor="middle" class="small-label">Jammer detection</text>
+      <text x="0" y="52" text-anchor="middle" class="small-label">Evasive maneuvers</text>
+    </g>
+
+    <!-- T3: Adaptive Swarm Tactics -->
+    <g transform="translate(700, 180)">
+      <circle cx="0" cy="0" r="20" class="attacker" opacity="0.85"/>
+      <text x="0" y="-30" text-anchor="middle" class="small-label" fill="#e74c3c">Gen 4: Adaptive</text>
+      <text x="0" y="40" text-anchor="middle" class="small-label">Learn defenses</text>
+      <text x="0" y="52" text-anchor="middle" class="small-label">Real-time evolution</text>
+    </g>
+
+    <!-- T4: Fully Autonomous Mega-Swarms -->
+    <g transform="translate(900, 120)">
+      <circle cx="0" cy="0" r="20" class="attacker" opacity="1.0"/>
+      <text x="0" y="-30" text-anchor="middle" class="small-label" fill="#e74c3c">Gen 5: Mega-Swarm</text>
+      <text x="0" y="40" text-anchor="middle" class="small-label">1000+ drones</text>
+      <text x="0" y="52" text-anchor="middle" class="small-label">Self-replicating tactics</text>
+    </g>
+
+    <!-- Evolution path -->
+    <path d="M 100 500 Q 200 450 300 400 Q 400 340 500 280 Q 600 230 700 180 Q 800 150 900 120"
+          class="evolution-path" marker-end="url(#arrow-gray)"/>
+  </g>
+
+  <!-- DEFENDER EVOLUTION PATH (GREEN) -->
+  <g id="defender-path">
+    <!-- T0: Manual Monitoring -->
+    <g transform="translate(100, 550)">
+      <rect x="-20" y="-20" width="40" height="40" rx="3" class="defender" opacity="0.3"/>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Gen 1: Manual</text>
+      <text x="0" y="47" text-anchor="middle" class="small-label">Human operators</text>
+      <text x="0" y="59" text-anchor="middle" class="small-label">Radar only</text>
+    </g>
+
+    <!-- T1: Automated Detection -->
+    <g transform="translate(300, 460)">
+      <rect x="-20" y="-20" width="40" height="40" rx="3" class="defender" opacity="0.5"/>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Gen 2: Automated</text>
+      <text x="0" y="47" text-anchor="middle" class="small-label">Multi-modal sensors</text>
+      <text x="0" y="59" text-anchor="middle" class="small-label">Basic jamming</text>
+    </g>
+
+    <!-- T2: AI Sensor Fusion -->
+    <g transform="translate(500, 340)">
+      <rect x="-20" y="-20" width="40" height="40" rx="3" class="defender" opacity="0.7"/>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Gen 3: AI Fusion</text>
+      <text x="0" y="47" text-anchor="middle" class="small-label">Predictive tracking</text>
+      <text x="0" y="59" text-anchor="middle" class="small-label">Soft/hard kill</text>
+    </g>
+
+    <!-- T3: Distributed Mega-Brain -->
+    <g transform="translate(700, 220)">
+      <rect x="-20" y="-20" width="40" height="40" rx="3" class="defender" opacity="0.85"/>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Gen 4: Mega-Brain</text>
+      <text x="0" y="47" text-anchor="middle" class="small-label">TWEANN evolution</text>
+      <text x="0" y="59" text-anchor="middle" class="small-label">Swarm neutralization</text>
+    </g>
+
+    <!-- T4: Planetary Defense Network -->
+    <g transform="translate(900, 150)">
+      <rect x="-20" y="-20" width="40" height="40" rx="3" class="defender" opacity="1.0"/>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Gen 5: Planetary Net</text>
+      <text x="0" y="47" text-anchor="middle" class="small-label">Global mesh</text>
+      <text x="0" y="59" text-anchor="middle" class="small-label">Predictive suppression</text>
+    </g>
+
+    <!-- Evolution path -->
+    <path d="M 100 550 Q 200 505 300 460 Q 400 400 500 340 Q 600 280 700 220 Q 800 185 900 150"
+          class="evolution-path" marker-end="url(#arrow-gray)"/>
+  </g>
+
+  <!-- BREAKTHROUGH & COUNTER EVENTS -->
+  <!-- Attacker breakthrough at T2 -->
+  <path d="M 500 280 Q 480 300 460 320" class="breakthrough" marker-end="url(#arrow-orange)"/>
+  <text x="440" y="335" text-anchor="middle" class="small-label" fill="#f39c12">Breakthrough!</text>
+  <text x="440" y="347" text-anchor="middle" class="small-label" fill="#f39c12">AI evasion defeats Gen 2</text>
+
+  <!-- Defender counter at T3 -->
+  <path d="M 700 220 Q 720 200 740 180" class="counter" marker-end="url(#arrow-blue)"/>
+  <text x="760" y="175" text-anchor="middle" class="small-label" fill="#3498db">Counter!</text>
+  <text x="760" y="187" text-anchor="middle" class="small-label" fill="#3498db">Mega-brain adapts</text>
+
+  <!-- Fitness Graph (Bottom Right) -->
+  <g transform="translate(650, 420)">
+    <text x="0" y="0" class="label">Relative Fitness Over Time:</text>
+
+    <!-- Axes -->
+    <line x1="20" y1="80" x2="320" y2="80" stroke="#95a5a6" stroke-width="2"/>
+    <line x1="20" y1="20" x2="20" y2="80" stroke="#95a5a6" stroke-width="2"/>
+
+    <!-- Attacker fitness (oscillating advantage) -->
+    <path d="M 20 60 Q 70 70 95 65 Q 120 58 145 50 Q 170 55 195 60 Q 220 52 245 48 Q 270 50 295 55 Q 310 58 320 60"
+          class="fitness-line-attack"/>
+    <text x="330" y="63" class="small-label" fill="#e74c3c">Attacker</text>
+
+    <!-- Defender fitness (oscillating advantage) -->
+    <path d="M 20 70 Q 70 60 95 55 Q 120 60 145 65 Q 170 62 195 58 Q 220 62 245 60 Q 270 58 295 55 Q 310 53 320 50"
+          class="fitness-line-defend"/>
+    <text x="330" y="53" class="small-label" fill="#27ae60">Defender</text>
+
+    <!-- Threshold line -->
+    <line x1="20" y1="60" x2="320" y2="60" stroke="#f39c12" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="0" y="63" class="small-label">0.5</text>
+    <text x="0" y="25" class="small-label">1.0</text>
+    <text x="0" y="83" class="small-label">0.0</text>
+  </g>
+
+  <!-- Key Insights -->
+  <g transform="translate(50, 80)">
+    <text x="0" y="0" class="label" fill="#9b59b6">TWEANN Mega-Brain Advantages:</text>
+    <text x="0" y="15" class="small-label">✓ Evolves faster than manual updates</text>
+    <text x="0" y="28" class="small-label">✓ Shares learned tactics across global mesh</text>
+    <text x="0" y="41" class="small-label">✓ Predicts attacker adaptations via simulation</text>
+    <text x="0" y="54" class="small-label">✓ No single point of failure (distributed evolution)</text>
+  </g>
+
+  <!-- Stability Concerns -->
+  <g transform="translate(650, 80)">
+    <text x="0" y="0" class="label" fill="#e74c3c">⚠ Strategic Stability Risks:</text>
+    <text x="0" y="15" class="small-label">• Escalation spiral: faster cycles → preemption pressure</text>
+    <text x="0" y="28" class="small-label">• Unpredictable emergent behaviors in Gen 5</text>
+    <text x="0" y="41" class="small-label">• Dual-use technology (defense ↔ offense)</text>
+    <text x="0" y="54" class="small-label">• Verification challenges (hidden capabilities)</text>
+  </g>
+
+  <!-- Annotations -->
+  <g transform="translate(350, 240)">
+    <line x1="0" y1="0" x2="30" y2="30" stroke="#f39c12" stroke-width="1.5"/>
+    <rect x="35" y="25" width="140" height="40" rx="3" fill="#f39c12" opacity="0.1" stroke="#d68910" stroke-width="1"/>
+    <text x="105" y="40" text-anchor="middle" class="small-label" fill="#d68910">Red Queen Effect:</text>
+    <text x="105" y="52" text-anchor="middle" class="small-label">Run faster to stay in place</text>
+  </g>
+
+  <g transform="translate(550, 180)">
+    <line x1="0" y1="0" x2="30" y2="-30" stroke="#27ae60" stroke-width="1.5"/>
+    <rect x="35" y="-55" width="140" height="40" rx="3" fill="#27ae60" opacity="0.1" stroke="#229954" stroke-width="1"/>
+    <text x="105" y="-40" text-anchor="middle" class="small-label" fill="#229954">Defender's Dilemma:</text>
+    <text x="105" y="-28" text-anchor="middle" class="small-label">Must defend all vectors</text>
+  </g>
+</svg>

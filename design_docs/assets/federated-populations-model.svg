@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .node-box { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .coordinator-box { fill: #e74c3c; stroke: #c0392b; stroke-width: 3; }
+      .dht-cloud { fill: #ecf0f1; stroke: #95a5a6; stroke-width: 2; stroke-dasharray: 5,5; }
+      .fitness-arrow { stroke: #9b59b6; stroke-width: 2; fill: none; marker-end: url(#arrowhead-purple); }
+      .survivor-arrow { stroke: #27ae60; stroke-width: 2; fill: none; marker-end: url(#arrowhead-green); }
+      .agent-box { fill: #1abc9c; stroke: #16a085; stroke-width: 1; }
+    </style>
+    <marker id="arrowhead-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#9b59b6" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#27ae60" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title">Model 2: Federated Populations</text>
+  <text x="400" y="50" text-anchor="middle" class="subtitle">Coordinated selection across distributed nodes</text>
+
+  <!-- DHT Cloud -->
+  <ellipse cx="400" cy="150" rx="350" ry="60" class="dht-cloud"/>
+  <text x="400" y="150" text-anchor="middle" class="label">Macula DHT (Service Discovery)</text>
+  <text x="400" y="170" text-anchor="middle" class="small-label">Topic: tweann.coordinator.realm_X</text>
+
+  <!-- Coordinator Node (Top Center) -->
+  <g transform="translate(310, 240)">
+    <rect width="180" height="100" rx="5" class="coordinator-box"/>
+    <text x="90" y="25" text-anchor="middle" class="label" fill="white">Coordinator Node</text>
+
+    <rect x="20" y="35" width="140" height="25" rx="3" fill="#c0392b" stroke="#a93226" stroke-width="1"/>
+    <text x="90" y="52" text-anchor="middle" class="small-label" fill="white">Aggregate Fitness</text>
+
+    <rect x="20" y="65" width="140" height="25" rx="3" fill="#c0392b" stroke="#a93226" stroke-width="1"/>
+    <text x="90" y="82" text-anchor="middle" class="small-label" fill="white">Global Selection</text>
+  </g>
+
+  <!-- Worker Node A (Bottom Left) -->
+  <g transform="translate(40, 420)">
+    <rect width="200" height="140" rx="5" class="node-box"/>
+    <text x="100" y="25" text-anchor="middle" class="label" fill="white">Worker Node A</text>
+
+    <text x="100" y="45" text-anchor="middle" class="small-label" fill="white">Agents 1-100</text>
+
+    <!-- Sample agents -->
+    <rect x="20" y="55" width="35" height="20" rx="2" class="agent-box"/>
+    <text x="37" y="69" text-anchor="middle" class="small-label" fill="white">A1</text>
+
+    <rect x="60" y="55" width="35" height="20" rx="2" class="agent-box"/>
+    <text x="77" y="69" text-anchor="middle" class="small-label" fill="white">A2</text>
+
+    <rect x="100" y="55" width="35" height="20" rx="2" class="agent-box"/>
+    <text x="117" y="69" text-anchor="middle" class="small-label" fill="white">...</text>
+
+    <rect x="140" y="55" width="40" height="20" rx="2" class="agent-box"/>
+    <text x="160" y="69" text-anchor="middle" class="small-label" fill="white">A100</text>
+
+    <rect x="20" y="85" width="160" height="25" rx="3" fill="#2980b9" stroke="#21618c" stroke-width="1"/>
+    <text x="100" y="102" text-anchor="middle" class="small-label" fill="white">Evaluate Fitness</text>
+
+    <rect x="20" y="115" width="160" height="20" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="100" y="129" text-anchor="middle" class="small-label" fill="white">Report: Avg 0.78</text>
+  </g>
+
+  <!-- Worker Node B (Bottom Center) -->
+  <g transform="translate(300, 420)">
+    <rect width="200" height="140" rx="5" class="node-box"/>
+    <text x="100" y="25" text-anchor="middle" class="label" fill="white">Worker Node B</text>
+
+    <text x="100" y="45" text-anchor="middle" class="small-label" fill="white">Agents 101-200</text>
+
+    <rect x="20" y="55" width="40" height="20" rx="2" class="agent-box"/>
+    <text x="40" y="69" text-anchor="middle" class="small-label" fill="white">A101</text>
+
+    <rect x="65" y="55" width="35" height="20" rx="2" class="agent-box"/>
+    <text x="82" y="69" text-anchor="middle" class="small-label" fill="white">...</text>
+
+    <rect x="140" y="55" width="40" height="20" rx="2" class="agent-box"/>
+    <text x="160" y="69" text-anchor="middle" class="small-label" fill="white">A200</text>
+
+    <rect x="20" y="85" width="160" height="25" rx="3" fill="#2980b9" stroke="#21618c" stroke-width="1"/>
+    <text x="100" y="102" text-anchor="middle" class="small-label" fill="white">Evaluate Fitness</text>
+
+    <rect x="20" y="115" width="160" height="20" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="100" y="129" text-anchor="middle" class="small-label" fill="white">Report: Avg 0.82</text>
+  </g>
+
+  <!-- Worker Node C (Bottom Right) -->
+  <g transform="translate(560, 420)">
+    <rect width="200" height="140" rx="5" class="node-box"/>
+    <text x="100" y="25" text-anchor="middle" class="label" fill="white">Worker Node C</text>
+
+    <text x="100" y="45" text-anchor="middle" class="small-label" fill="white">Agents 201-300</text>
+
+    <rect x="20" y="55" width="40" height="20" rx="2" class="agent-box"/>
+    <text x="40" y="69" text-anchor="middle" class="small-label" fill="white">A201</text>
+
+    <rect x="65" y="55" width="35" height="20" rx="2" class="agent-box"/>
+    <text x="82" y="69" text-anchor="middle" class="small-label" fill="white">...</text>
+
+    <rect x="140" y="55" width="40" height="20" rx="2" class="agent-box"/>
+    <text x="160" y="69" text-anchor="middle" class="small-label" fill="white">A300</text>
+
+    <rect x="20" y="85" width="160" height="25" rx="3" fill="#2980b9" stroke="#21618c" stroke-width="1"/>
+    <text x="100" y="102" text-anchor="middle" class="small-label" fill="white">Evaluate Fitness</text>
+
+    <rect x="20" y="115" width="160" height="20" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="100" y="129" text-anchor="middle" class="small-label" fill="white">Report: Avg 0.85</text>
+  </g>
+
+  <!-- Fitness Report Arrows (Up to Coordinator) -->
+  <path d="M 140 420 L 380 340" class="fitness-arrow"/>
+  <text x="220" y="375" class="small-label" fill="#9b59b6">Fitness</text>
+
+  <path d="M 400 420 L 400 340" class="fitness-arrow"/>
+  <text x="410" y="375" class="small-label" fill="#9b59b6">Fitness</text>
+
+  <path d="M 660 420 L 420 340" class="fitness-arrow"/>
+  <text x="580" y="375" class="small-label" fill="#9b59b6">Fitness</text>
+
+  <!-- Survivor Distribution Arrows (Down from Coordinator) -->
+  <path d="M 360 340 L 180 420" class="survivor-arrow"/>
+  <text x="240" y="395" class="small-label" fill="#27ae60">Survivors</text>
+
+  <path d="M 400 340 L 400 420" class="survivor-arrow"/>
+  <text x="330" y="395" class="small-label" fill="#27ae60">Survivors</text>
+
+  <path d="M 440 340 L 620 420" class="survivor-arrow"/>
+  <text x="560" y="395" class="small-label" fill="#27ae60">Survivors</text>
+
+  <!-- Legend -->
+  <g transform="translate(20, 580)">
+    <text x="0" y="0" class="small-label">✓ Population divided across nodes</text>
+    <text x="0" y="15" class="small-label">✓ Coordinator aggregates fitness reports</text>
+    <text x="300" y="0" class="small-label">✓ Global selection (top 20% survive)</text>
+    <text x="300" y="15" class="small-label">✓ Survivors distributed back to workers</text>
+    <text x="600" y="0" class="small-label">✓ Faster convergence</text>
+    <text x="600" y="15" class="small-label">✓ Load balancing</text>
+  </g>
+</svg>

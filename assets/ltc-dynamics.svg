@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <defs>
+    <linearGradient id="stateGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="inputGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#34d399;stop-opacity:1" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="450" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#1e293b">LTC ODE Dynamics: State Evolution Over Time</text>
+  <text x="400" y="50" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">dx/dt = -[1/tau + f(x, I, theta)] * x(t) + f(x, I, theta) * A</text>
+
+  <!-- Time axis plot area -->
+  <g transform="translate(80, 80)">
+    <!-- Grid -->
+    <g stroke="#e2e8f0" stroke-width="1">
+      <line x1="0" y1="0" x2="0" y2="200"/>
+      <line x1="0" y1="200" x2="600" y2="200"/>
+      <line x1="0" y1="50" x2="600" y2="50" stroke-dasharray="4,4"/>
+      <line x1="0" y1="100" x2="600" y2="100" stroke-dasharray="4,4"/>
+      <line x1="0" y1="150" x2="600" y2="150" stroke-dasharray="4,4"/>
+      <line x1="150" y1="0" x2="150" y2="200" stroke-dasharray="4,4"/>
+      <line x1="300" y1="0" x2="300" y2="200" stroke-dasharray="4,4"/>
+      <line x1="450" y1="0" x2="450" y2="200" stroke-dasharray="4,4"/>
+    </g>
+
+    <!-- Axis labels -->
+    <text x="300" y="225" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#475569">Time (t)</text>
+    <text x="-30" y="100" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#475569" transform="rotate(-90, -30, 100)">State x(t)</text>
+
+    <!-- Y-axis values -->
+    <text x="-10" y="8" text-anchor="end" font-family="monospace" font-size="10" fill="#64748b">A</text>
+    <text x="-10" y="108" text-anchor="end" font-family="monospace" font-size="10" fill="#64748b">0</text>
+    <text x="-10" y="205" text-anchor="end" font-family="monospace" font-size="10" fill="#64748b">-A</text>
+
+    <!-- Input signal (green, step function) -->
+    <path d="M 0 180 L 100 180 L 100 60 L 250 60 L 250 140 L 400 140 L 400 80 L 600 80"
+          fill="none" stroke="url(#inputGrad)" stroke-width="2" stroke-dasharray="6,3"/>
+
+    <!-- State trajectory (purple, smooth curve responding to input) -->
+    <path d="M 0 100
+             Q 50 100 100 100
+             C 120 100 130 75 150 65
+             C 200 55 230 58 250 62
+             C 270 70 290 100 320 115
+             C 350 125 380 130 400 125
+             C 420 115 450 95 480 88
+             C 530 80 570 82 600 83"
+          fill="none" stroke="url(#stateGrad)" stroke-width="3"/>
+
+    <!-- Annotations -->
+    <g transform="translate(105, 40)">
+      <rect x="-5" y="-12" width="90" height="18" rx="3" fill="white" filter="url(#shadow)"/>
+      <text x="0" y="0" font-family="system-ui, sans-serif" font-size="10" fill="#6366f1">Fast adaptation</text>
+      <text x="0" y="12" font-family="monospace" font-size="9" fill="#64748b">(high input)</text>
+    </g>
+
+    <g transform="translate(255, 145)">
+      <rect x="-5" y="-12" width="95" height="18" rx="3" fill="white" filter="url(#shadow)"/>
+      <text x="0" y="0" font-family="system-ui, sans-serif" font-size="10" fill="#6366f1">Slow relaxation</text>
+      <text x="0" y="12" font-family="monospace" font-size="9" fill="#64748b">(moderate input)</text>
+    </g>
+
+    <!-- Legend -->
+    <g transform="translate(450, 5)">
+      <rect x="0" y="0" width="145" height="45" rx="5" fill="white" stroke="#e2e8f0" filter="url(#shadow)"/>
+      <line x1="10" y1="15" x2="40" y2="15" stroke="#6366f1" stroke-width="3"/>
+      <text x="50" y="18" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">State x(t)</text>
+      <line x1="10" y1="32" x2="40" y2="32" stroke="#10b981" stroke-width="2" stroke-dasharray="6,3"/>
+      <text x="50" y="35" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">Input I(t)</text>
+    </g>
+  </g>
+
+  <!-- Key insight boxes -->
+  <g transform="translate(50, 320)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="#eef2ff" stroke="#818cf8" stroke-width="1" filter="url(#shadow)"/>
+    <text x="110" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#4338ca">Liquid Time Constant</text>
+    <text x="15" y="40" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">tau_effective = tau_base / (1 + f(...))</text>
+    <text x="15" y="58" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Strong input = Fast response</text>
+    <text x="15" y="73" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Weak input = Slow response</text>
+    <text x="15" y="88" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">The "liquid" flows between speeds</text>
+  </g>
+
+  <g transform="translate(290, 320)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="#ecfdf5" stroke="#34d399" stroke-width="1" filter="url(#shadow)"/>
+    <text x="110" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#059669">State Persistence</text>
+    <text x="15" y="40" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">x(t) carries information forward</text>
+    <text x="15" y="58" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Unlike standard neurons:</text>
+    <text x="15" y="73" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">- State persists between steps</text>
+    <text x="15" y="88" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">- Temporal memory without RNN</text>
+  </g>
+
+  <g transform="translate(530, 320)">
+    <rect x="0" y="0" width="220" height="100" rx="8" fill="#fef3c7" stroke="#fbbf24" stroke-width="1" filter="url(#shadow)"/>
+    <text x="110" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#d97706">Bounded Dynamics</text>
+    <text x="15" y="40" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">State bounded by A: [-A, +A]</text>
+    <text x="15" y="58" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Prevents numerical explosion</text>
+    <text x="15" y="73" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Ensures stable dynamics</text>
+    <text x="15" y="88" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">A is evolvable parameter</text>
+  </g>
+
+  <!-- Attribution -->
+  <text x="400" y="440" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Based on Hasani et al. (2021) "Liquid Time-constant Networks" - AAAI Conference on Artificial Intelligence</text>
+</svg>

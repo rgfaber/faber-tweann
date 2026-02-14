@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #333; }
+      .system-box { fill: #1168bd; stroke: #0b4884; stroke-width: 2; }
+      .person-box { fill: #08427b; stroke: #052e56; stroke-width: 2; }
+      .external-box { fill: #999; stroke: #666; stroke-width: 2; }
+      .label { font: bold 16px sans-serif; fill: white; text-anchor: middle; }
+      .tech { font: italic 12px sans-serif; fill: white; text-anchor: middle; }
+      .desc { font: 12px sans-serif; fill: white; text-anchor: middle; }
+      .arrow { stroke: #666; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font: 12px sans-serif; fill: #666; text-anchor: middle; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" class="title">System Context - Faber TWEANN</text>
+  <text x="400" y="55" class="desc" style="fill: #666;">Evolutionary Neural Network Library</text>
+
+  <!-- Developer (Person) -->
+  <rect x="50" y="150" width="200" height="120" rx="5" class="person-box"/>
+  <text x="150" y="185" class="label">Developer</text>
+  <text x="150" y="205" class="tech">[Person]</text>
+  <text x="150" y="230" class="desc">Builds AI applications</text>
+  <text x="150" y="250" class="desc">using evolutionary</text>
+  <text x="150" y="265" class="desc">neural networks</text>
+
+  <!-- Faber TWEANN System -->
+  <rect x="300" y="250" width="200" height="140" rx="5" class="system-box"/>
+  <text x="400" y="290" class="label">Faber TWEANN</text>
+  <text x="400" y="310" class="tech">[Erlang/OTP Library]</text>
+  <text x="400" y="340" class="desc">Evolves neural network</text>
+  <text x="400" y="360" class="desc">topology and weights</text>
+  <text x="400" y="380" class="desc">through natural selection</text>
+
+  <!-- Mnesia Database -->
+  <rect x="550" y="150" width="200" height="120" rx="5" class="external-box"/>
+  <text x="650" y="185" class="label">Mnesia</text>
+  <text x="650" y="205" class="tech">[Database]</text>
+  <text x="650" y="230" class="desc">Stores genotypes</text>
+  <text x="650" y="250" class="desc">(network blueprints)</text>
+  <text x="650" y="265" class="desc">persistently</text>
+
+  <!-- Application Environment -->
+  <rect x="300" y="450" width="200" height="100" rx="5" class="external-box"/>
+  <text x="400" y="480" class="label">Environment</text>
+  <text x="400" y="500" class="tech">[External System]</text>
+  <text x="400" y="525" class="desc">Problem domain</text>
+  <text x="400" y="540" class="desc">(XOR, cart-pole, etc.)</text>
+
+  <!-- Arrows -->
+  <!-- Developer -> TWEANN -->
+  <path d="M 250 210 L 300 280" class="arrow"/>
+  <text x="265" y="235" class="arrow-label">Constructs agents,</text>
+  <text x="265" y="250" class="arrow-label">runs evolution</text>
+
+  <!-- TWEANN -> Mnesia -->
+  <path d="M 500 280 L 550 210" class="arrow"/>
+  <text x="540" y="235" class="arrow-label">Reads/writes</text>
+  <text x="540" y="250" class="arrow-label">genotypes</text>
+
+  <!-- TWEANN -> Environment -->
+  <path d="M 400 390 L 400 450" class="arrow"/>
+  <text x="450" y="420" class="arrow-label">Evaluates fitness</text>
+
+  <!-- Environment -> TWEANN -->
+  <path d="M 380 450 L 380 390" class="arrow"/>
+  <text x="330" y="420" class="arrow-label">Provides feedback</text>
+</svg>

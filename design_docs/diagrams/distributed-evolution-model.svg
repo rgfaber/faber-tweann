@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .node-box { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .dht-cloud { fill: #ecf0f1; stroke: #95a5a6; stroke-width: 2; stroke-dasharray: 5,5; }
+      .arrow { stroke: #e74c3c; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .pub-arrow { stroke: #27ae60; stroke-width: 2; fill: none; marker-end: url(#arrowhead-green); }
+      .sub-arrow { stroke: #f39c12; stroke-width: 2; fill: none; marker-end: url(#arrowhead-orange); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e74c3c" />
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#27ae60" />
+    </marker>
+    <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#f39c12" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title">Model 1: Distributed Evolution</text>
+  <text x="400" y="50" text-anchor="middle" class="subtitle">Independent evolution with genotype sharing</text>
+
+  <!-- DHT Cloud -->
+  <ellipse cx="400" cy="250" rx="350" ry="100" class="dht-cloud"/>
+  <text x="400" y="200" text-anchor="middle" class="label">Macula DHT (Kademlia)</text>
+  <text x="400" y="220" text-anchor="middle" class="small-label">Topic: tweann.genotypes.species_X</text>
+
+  <!-- Node A (Left) -->
+  <g transform="translate(80, 280)">
+    <rect width="180" height="160" rx="5" class="node-box"/>
+    <text x="90" y="25" text-anchor="middle" class="label" fill="white">Node A (Berlin)</text>
+
+    <!-- Population Monitor -->
+    <rect x="20" y="40" width="140" height="30" rx="3" fill="#2ecc71" stroke="#27ae60" stroke-width="1"/>
+    <text x="90" y="60" text-anchor="middle" class="small-label" fill="white">Population Monitor</text>
+
+    <!-- Local Evolution -->
+    <rect x="20" y="80" width="140" height="30" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="90" y="100" text-anchor="middle" class="small-label" fill="white">Local Evolution</text>
+
+    <!-- Best Genotype -->
+    <rect x="20" y="120" width="140" height="30" rx="3" fill="#e67e22" stroke="#d35400" stroke-width="1"/>
+    <text x="90" y="140" text-anchor="middle" class="small-label" fill="white">Best: Fitness 0.95</text>
+  </g>
+
+  <!-- Node B (Center) -->
+  <g transform="translate(310, 280)">
+    <rect width="180" height="160" rx="5" class="node-box"/>
+    <text x="90" y="25" text-anchor="middle" class="label" fill="white">Node B (Tokyo)</text>
+
+    <rect x="20" y="40" width="140" height="30" rx="3" fill="#2ecc71" stroke="#27ae60" stroke-width="1"/>
+    <text x="90" y="60" text-anchor="middle" class="small-label" fill="white">Population Monitor</text>
+
+    <rect x="20" y="80" width="140" height="30" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="90" y="100" text-anchor="middle" class="small-label" fill="white">Local Evolution</text>
+
+    <rect x="20" y="120" width="140" height="30" rx="3" fill="#e67e22" stroke="#d35400" stroke-width="1"/>
+    <text x="90" y="140" text-anchor="middle" class="small-label" fill="white">Best: Fitness 0.88</text>
+  </g>
+
+  <!-- Node C (Right) -->
+  <g transform="translate(540, 280)">
+    <rect width="180" height="160" rx="5" class="node-box"/>
+    <text x="90" y="25" text-anchor="middle" class="label" fill="white">Node C (New York)</text>
+
+    <rect x="20" y="40" width="140" height="30" rx="3" fill="#2ecc71" stroke="#27ae60" stroke-width="1"/>
+    <text x="90" y="60" text-anchor="middle" class="small-label" fill="white">Population Monitor</text>
+
+    <rect x="20" y="80" width="140" height="30" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="90" y="100" text-anchor="middle" class="small-label" fill="white">Local Evolution</text>
+
+    <rect x="20" y="120" width="140" height="30" rx="3" fill="#e67e22" stroke="#d35400" stroke-width="1"/>
+    <text x="90" y="140" text-anchor="middle" class="small-label" fill="white">Best: Fitness 0.91</text>
+  </g>
+
+  <!-- Publish arrows (up to DHT) -->
+  <path d="M 170 280 Q 170 240 200 230" class="pub-arrow"/>
+  <text x="120" y="255" class="small-label" fill="#27ae60">Publish</text>
+
+  <path d="M 400 280 L 400 230" class="pub-arrow"/>
+  <text x="410" y="255" class="small-label" fill="#27ae60">Publish</text>
+
+  <path d="M 630 280 Q 630 240 600 230" class="pub-arrow"/>
+  <text x="640" y="255" class="small-label" fill="#27ae60">Publish</text>
+
+  <!-- Subscribe arrows (down from DHT) -->
+  <path d="M 220 270 Q 280 270 310 280" class="sub-arrow"/>
+  <text x="250" y="275" class="small-label" fill="#f39c12">Subscribe</text>
+
+  <path d="M 450 270 Q 510 270 540 280" class="sub-arrow"/>
+  <text x="480" y="275" class="small-label" fill="#f39c12">Subscribe</text>
+
+  <!-- Legend -->
+  <g transform="translate(20, 460)">
+    <text x="0" y="0" class="small-label">✓ Each node evolves independently</text>
+    <text x="0" y="15" class="small-label">✓ Superior genotypes published to DHT</text>
+    <text x="0" y="30" class="small-label">✓ Nodes subscribe and incorporate best solutions</text>
+    <text x="400" y="0" class="small-label">✓ Fault-tolerant (node failures OK)</text>
+    <text x="400" y="15" class="small-label">✓ Privacy-preserving (local data)</text>
+    <text x="400" y="30" class="small-label">✓ O(log N) DHT routing</text>
+  </g>
+</svg>

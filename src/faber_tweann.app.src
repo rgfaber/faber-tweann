@@ -1,0 +1,15 @@
+{application, faber_tweann,
+ [{description, "Faber TWEANN - Topology and Weight Evolving Artificial Neural Networks"},
+  {vsn, "0.1.0"},
+  {registered, [faber_tweann_sup, morphology_registry]},
+  {mod, {faber_tweann_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    mnesia
+   ]},
+  {env,[]},
+  {modules, []},
+  {licenses, ["Apache-2.0"]},
+  {links, [{"GitHub", "https://github.com/rgfaber/faber-tweann"}]}
+ ]}.

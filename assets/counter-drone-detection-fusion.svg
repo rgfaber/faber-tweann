@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .sensor { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .fusion { fill: #9b59b6; stroke: #8e44ad; stroke-width: 2; }
+      .threat { fill: #e74c3c; stroke: #c0392b; stroke-width: 2; }
+      .detection { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .mesh-link { stroke: #27ae60; stroke-width: 2; fill: none; opacity: 0.6; }
+      .data-flow { stroke: #3498db; stroke-width: 2; fill: none; marker-end: url(#arrow-blue); }
+      .alert-flow { stroke: #e74c3c; stroke-width: 3; fill: none; marker-end: url(#arrow-red); }
+    </style>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#3498db" />
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e74c3c" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" class="title">Multi-Modal Sensor Fusion for Counter-Drone Detection</text>
+  <text x="450" y="50" text-anchor="middle" class="subtitle">Distributed Mega-Brain Architecture vs Centralized Fusion</text>
+
+  <!-- Threat Drone -->
+  <g transform="translate(750, 100)">
+    <circle cx="0" cy="0" r="25" class="threat" opacity="0.3"/>
+    <path d="M -15 -15 L 15 15 M -15 15 L 15 -15" stroke="#c0392b" stroke-width="3"/>
+    <text x="0" y="45" text-anchor="middle" class="label" fill="#e74c3c">Attack Drone</text>
+    <text x="0" y="60" text-anchor="middle" class="small-label">Position: (750, 100)</text>
+    <text x="0" y="73" text-anchor="middle" class="small-label">Velocity: 20 m/s</text>
+  </g>
+
+  <!-- LEFT: Traditional Centralized Fusion -->
+  <g transform="translate(50, 150)">
+    <text x="150" y="0" text-anchor="middle" class="subtitle">Traditional: Centralized Fusion</text>
+
+    <!-- Sensors -->
+    <g transform="translate(30, 50)">
+      <rect x="-40" y="-20" width="80" height="40" rx="3" class="sensor"/>
+      <text x="0" y="-5" text-anchor="middle" class="small-label" fill="white">RF Sensor</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">2.4 GHz</text>
+      <text x="0" y="55" text-anchor="middle" class="small-label">Detection: 0.8</text>
+    </g>
+
+    <g transform="translate(130, 50)">
+      <rect x="-40" y="-20" width="80" height="40" rx="3" class="sensor"/>
+      <text x="0" y="-5" text-anchor="middle" class="small-label" fill="white">Acoustic</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">Mic Array</text>
+      <text x="0" y="55" text-anchor="middle" class="small-label">Detection: 0.6</text>
+    </g>
+
+    <g transform="translate(230, 50)">
+      <rect x="-40" y="-20" width="80" height="40" rx="3" class="sensor"/>
+      <text x="0" y="-5" text-anchor="middle" class="small-label" fill="white">Visual/IR</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">Camera</text>
+      <text x="0" y="55" text-anchor="middle" class="small-label">Detection: 0.9</text>
+    </g>
+
+    <!-- Data flows to fusion center -->
+    <path d="M 30 90 L 150 160" class="data-flow"/>
+    <path d="M 130 90 L 150 160" class="data-flow"/>
+    <path d="M 230 90 L 150 160" class="data-flow"/>
+
+    <!-- Central Fusion Center -->
+    <g transform="translate(150, 180)">
+      <rect x="-60" y="-25" width="120" height="50" rx="5" class="fusion"/>
+      <text x="0" y="-5" text-anchor="middle" class="label" fill="white">Fusion Center</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">Kalman Filter</text>
+    </g>
+
+    <!-- Alert flow -->
+    <path d="M 150 205 L 150 250" class="alert-flow"/>
+
+    <!-- Detection Result -->
+    <g transform="translate(150, 270)">
+      <rect x="-50" y="-20" width="100" height="40" rx="3" class="detection"/>
+      <text x="0" y="-5" text-anchor="middle" class="small-label" fill="white">Fused Detection</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">Conf: 0.95</text>
+    </g>
+
+    <!-- Problems -->
+    <g transform="translate(0, 330)">
+      <text x="150" y="0" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Single Point of Failure</text>
+      <text x="150" y="15" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ High Latency (network delay)</text>
+      <text x="150" y="30" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Bandwidth Bottleneck</text>
+    </g>
+  </g>
+
+  <!-- RIGHT: Distributed Mega-Brain Fusion -->
+  <g transform="translate(500, 150)">
+    <text x="150" y="0" text-anchor="middle" class="subtitle">Mega-Brain: Distributed Fusion</text>
+
+    <!-- Sensors with Local AI -->
+    <g transform="translate(30, 50)">
+      <rect x="-40" y="-30" width="80" height="60" rx="3" class="sensor"/>
+      <text x="0" y="-15" text-anchor="middle" class="small-label" fill="white">RF Sensor</text>
+      <text x="0" y="0" text-anchor="middle" class="small-label" fill="white">+ TWEANN</text>
+      <line x1="-30" y1="10" x2="30" y2="10" stroke="white" stroke-width="0.5"/>
+      <text x="0" y="20" text-anchor="middle" class="small-label" fill="white">Evolving</text>
+      <text x="0" y="75" text-anchor="middle" class="small-label">Local Det: 0.85</text>
+    </g>
+
+    <g transform="translate(130, 50)">
+      <rect x="-40" y="-30" width="80" height="60" rx="3" class="sensor"/>
+      <text x="0" y="-15" text-anchor="middle" class="small-label" fill="white">Acoustic</text>
+      <text x="0" y="0" text-anchor="middle" class="small-label" fill="white">+ TWEANN</text>
+      <line x1="-30" y1="10" x2="30" y2="10" stroke="white" stroke-width="0.5"/>
+      <text x="0" y="20" text-anchor="middle" class="small-label" fill="white">Evolving</text>
+      <text x="0" y="75" text-anchor="middle" class="small-label">Local Det: 0.70</text>
+    </g>
+
+    <g transform="translate(230, 50)">
+      <rect x="-40" y="-30" width="80" height="60" rx="3" class="sensor"/>
+      <text x="0" y="-15" text-anchor="middle" class="small-label" fill="white">Visual/IR</text>
+      <text x="0" y="0" text-anchor="middle" class="small-label" fill="white">+ TWEANN</text>
+      <line x1="-30" y1="10" x2="30" y2="10" stroke="white" stroke-width="0.5"/>
+      <text x="0" y="20" text-anchor="middle" class="small-label" fill="white">Evolving</text>
+      <text x="0" y="75" text-anchor="middle" class="small-label">Local Det: 0.92</text>
+    </g>
+
+    <!-- Mesh connections between sensors -->
+    <path d="M 70 80 L 90 80" class="mesh-link"/>
+    <path d="M 170 80 L 190 80" class="mesh-link"/>
+    <path d="M 50 115 Q 80 140 130 115" class="mesh-link"/>
+    <path d="M 150 115 Q 180 140 230 115" class="mesh-link"/>
+
+    <!-- Distributed Fusion (each sensor) -->
+    <g transform="translate(130, 150)">
+      <ellipse cx="0" cy="0" rx="120" ry="30" fill="#9b59b6" opacity="0.1" stroke="#8e44ad" stroke-width="2"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="#8e44ad">Distributed Fusion (Mesh)</text>
+    </g>
+
+    <!-- Alert flow (from any sensor) -->
+    <path d="M 130 180 L 130 230" class="alert-flow"/>
+
+    <!-- Detection Result -->
+    <g transform="translate(130, 250)">
+      <rect x="-50" y="-20" width="100" height="40" rx="3" class="detection"/>
+      <text x="0" y="-5" text-anchor="middle" class="small-label" fill="white">Fused Detection</text>
+      <text x="0" y="10" text-anchor="middle" class="small-label" fill="white">Conf: 0.97</text>
+    </g>
+
+    <!-- Genotype Sharing -->
+    <g transform="translate(270, 150)">
+      <rect x="0" y="-15" width="100" height="30" rx="3" fill="#27ae60" opacity="0.3" stroke="#229954" stroke-width="1"/>
+      <text x="50" y="5" text-anchor="middle" class="small-label" fill="#229954">Genotype →</text>
+    </g>
+
+    <!-- Advantages -->
+    <g transform="translate(0, 310)">
+      <text x="130" y="0" text-anchor="middle" class="small-label" fill="#27ae60">✓ No Single Point of Failure</text>
+      <text x="130" y="15" text-anchor="middle" class="small-label" fill="#27ae60">✓ Low Latency (local fusion)</text>
+      <text x="130" y="30" text-anchor="middle" class="small-label" fill="#27ae60">✓ Adaptive (evolves detection)</text>
+      <text x="130" y="45" text-anchor="middle" class="small-label" fill="#27ae60">✓ Resilient (partial degradation)</text>
+    </g>
+  </g>
+
+  <!-- Detection Waveforms Visualization -->
+  <g transform="translate(50, 520)">
+    <text x="0" y="0" class="label">Sensor Detection Confidence Over Time:</text>
+
+    <!-- Time axis -->
+    <line x1="20" y1="80" x2="800" y2="80" stroke="#95a5a6" stroke-width="2"/>
+    <text x="20" y="95" text-anchor="middle" class="small-label">0s</text>
+    <text x="400" y="95" text-anchor="middle" class="small-label">5s</text>
+    <text x="780" y="95" text-anchor="middle" class="small-label">10s</text>
+
+    <!-- RF Detection -->
+    <path d="M 20 80 Q 100 60 180 50 Q 260 45 340 48 Q 420 50 500 52 Q 580 53 660 54 Q 740 55 800 55"
+          stroke="#3498db" stroke-width="2" fill="none"/>
+    <text x="810" y="58" class="small-label" fill="#3498db">RF</text>
+
+    <!-- Acoustic Detection -->
+    <path d="M 20 80 Q 100 75 180 68 Q 260 62 340 60 Q 420 59 500 58 Q 580 58 660 58 Q 740 58 800 58"
+          stroke="#f39c12" stroke-width="2" fill="none"/>
+    <text x="810" y="61" class="small-label" fill="#f39c12">Acoustic</text>
+
+    <!-- Visual Detection -->
+    <path d="M 20 80 Q 100 55 180 45 Q 260 42 340 40 Q 420 39 500 38 Q 580 38 660 38 Q 740 38 800 38"
+          stroke="#27ae60" stroke-width="2" fill="none"/>
+    <text x="810" y="41" class="small-label" fill="#27ae60">Visual</text>
+
+    <!-- Fused Detection -->
+    <path d="M 20 80 Q 100 50 180 40 Q 260 35 340 32 Q 420 30 500 29 Q 580 28 660 28 Q 740 28 800 28"
+          stroke="#9b59b6" stroke-width="3" fill="none" stroke-dasharray="5,3"/>
+    <text x="810" y="31" class="small-label" fill="#9b59b6">Fused (0.97)</text>
+
+    <!-- Threshold line -->
+    <line x1="20" y1="50" x2="800" y2="50" stroke="#e74c3c" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="810" y="53" class="small-label" fill="#e74c3c">Threshold</text>
+
+    <!-- Confidence axis -->
+    <text x="5" y="25" class="small-label">1.0</text>
+    <text x="5" y="50" class="small-label">0.9</text>
+    <text x="5" y="80" class="small-label">0.5</text>
+  </g>
+</svg>

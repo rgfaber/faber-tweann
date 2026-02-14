@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .infrastructure-node { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .failed-node { fill: #e74c3c; stroke: #c0392b; stroke-width: 2; }
+      .backup-node { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .mesh-link { stroke: #27ae60; stroke-width: 2; fill: none; }
+      .failed-link { stroke: #e74c3c; stroke-width: 2; fill: none; stroke-dasharray: 5,5; opacity: 0.5; }
+      .attack-path { stroke: #e74c3c; stroke-width: 3; fill: none; marker-end: url(#arrow-red); stroke-dasharray: 10,5; }
+      .recovery-path { stroke: #27ae60; stroke-width: 2; fill: none; marker-end: url(#arrow-green); }
+    </style>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e74c3c" />
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#27ae60" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" class="title">Civil Infrastructure Resilience: Critical Systems Under Attack</text>
+  <text x="450" y="50" text-anchor="middle" class="subtitle">Power Grid + Water + Transportation coordinated via Mega-Brain</text>
+
+  <!-- Timeline -->
+  <text x="50" y="90" class="label">T=0: Normal Operation</text>
+  <text x="350" y="90" class="label" fill="#e74c3c">T=1: Coordinated Attack</text>
+  <text x="650" y="90" class="label" fill="#27ae60">T=2: Autonomous Recovery</text>
+
+  <!-- LAYER 1: Power Grid -->
+  <g transform="translate(50, 120)">
+    <text x="0" y="0" class="subtitle">Power Grid</text>
+
+    <!-- T=0: Normal -->
+    <g transform="translate(100, 30)">
+      <!-- Substations -->
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S1</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label">Substation 1</text>
+    </g>
+
+    <g transform="translate(180, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S2</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label">Substation 2</text>
+    </g>
+
+    <!-- Mesh connections -->
+    <path d="M 115 30 L 165 30" class="mesh-link"/>
+
+    <!-- T=1: Attack -->
+    <g transform="translate(300, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S1</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Hacked</text>
+      <!-- Explosion -->
+      <circle cx="0" cy="-30" r="20" fill="#e74c3c" opacity="0.3"/>
+    </g>
+
+    <g transform="translate(380, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S2</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label">Operational</text>
+    </g>
+
+    <!-- Failed link -->
+    <path d="M 315 30 L 365 30" class="failed-link"/>
+
+    <!-- Attack arrow -->
+    <path d="M 270 10 L 295 25" class="attack-path"/>
+    <text x="250" y="10" class="small-label" fill="#e74c3c">Cyber Attack</text>
+
+    <!-- T=2: Recovery -->
+    <g transform="translate(500, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S1</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label" fill="#95a5a6">Offline</text>
+    </g>
+
+    <g transform="translate(580, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">S2</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label" fill="#27ae60">Island Mode</text>
+    </g>
+
+    <g transform="translate(660, 30)">
+      <rect x="-15" y="-15" width="30" height="30" rx="3" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">B1</text>
+      <text x="0" y="45" text-anchor="middle" class="small-label" fill="#27ae60">Backup Online</text>
+    </g>
+
+    <!-- Recovery links -->
+    <path d="M 595 30 L 645 30" class="mesh-link"/>
+    <path d="M 630 10 L 655 25" class="recovery-path"/>
+    <text x="625" y="5" class="small-label" fill="#27ae60">Auto-route</text>
+  </g>
+
+  <!-- LAYER 2: Water System -->
+  <g transform="translate(50, 250)">
+    <text x="0" y="0" class="subtitle">Water Infrastructure</text>
+
+    <!-- T=0: Normal -->
+    <g transform="translate(100, 30)">
+      <circle cx="0" cy="0" r="15" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">P1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label">Pump 1</text>
+    </g>
+
+    <g transform="translate(180, 30)">
+      <circle cx="0" cy="0" r="15" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">T1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label">Treatment</text>
+    </g>
+
+    <!-- Mesh connections -->
+    <path d="M 115 30 L 165 30" class="mesh-link"/>
+
+    <!-- T=1: Attack -->
+    <g transform="translate(300, 30)">
+      <circle cx="0" cy="0" r="15" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">P1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label">Operational</text>
+    </g>
+
+    <g transform="translate(380, 30)">
+      <circle cx="0" cy="0" r="15" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">T1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Pipe Break</text>
+      <!-- Explosion -->
+      <circle cx="0" cy="-25" r="15" fill="#e74c3c" opacity="0.3"/>
+    </g>
+
+    <!-- Failed link -->
+    <path d="M 315 30 L 365 30" class="failed-link"/>
+
+    <!-- Attack arrow -->
+    <path d="M 350 10 L 375 25" class="attack-path"/>
+    <text x="330" y="5" class="small-label" fill="#e74c3c">Sabotage</text>
+
+    <!-- T=2: Recovery -->
+    <g transform="translate(500, 30)">
+      <circle cx="0" cy="0" r="15" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">P1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Increased</text>
+    </g>
+
+    <g transform="translate(580, 30)">
+      <circle cx="0" cy="0" r="15" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">T1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#95a5a6">Repairing</text>
+    </g>
+
+    <g transform="translate(660, 30)">
+      <circle cx="0" cy="0" r="15" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">T2</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Backup Active</text>
+    </g>
+
+    <!-- Recovery links -->
+    <path d="M 515 30 L 565 30" class="failed-link"/>
+    <path d="M 515 30 Q 540 10 565 10 L 645 10 Q 655 20 660 30" class="mesh-link"/>
+    <path d="M 595 30 L 645 30" class="mesh-link"/>
+    <text x="600" y="5" class="small-label" fill="#27ae60">Reroute</text>
+  </g>
+
+  <!-- LAYER 3: Transportation -->
+  <g transform="translate(50, 380)">
+    <text x="0" y="0" class="subtitle">Transportation Network</text>
+
+    <!-- T=0: Normal -->
+    <g transform="translate(100, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label">Intersection</text>
+    </g>
+
+    <g transform="translate(180, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="infrastructure-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I2</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label">Intersection</text>
+    </g>
+
+    <!-- Mesh connections -->
+    <path d="M 115 30 L 165 30" class="mesh-link"/>
+
+    <!-- T=1: Attack -->
+    <g transform="translate(300, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Jammed</text>
+      <!-- Explosion -->
+      <circle cx="0" cy="-30" r="20" fill="#e74c3c" opacity="0.3"/>
+    </g>
+
+    <g transform="translate(380, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I2</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#e74c3c">⚠ Gridlock</text>
+    </g>
+
+    <!-- Failed link -->
+    <path d="M 315 30 L 365 30" class="failed-link"/>
+
+    <!-- Attack arrow -->
+    <path d="M 270 10 L 295 25" class="attack-path"/>
+    <text x="230" y="10" class="small-label" fill="#e74c3c">Signal Jam</text>
+
+    <!-- T=2: Recovery -->
+    <g transform="translate(500, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="failed-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I1</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#95a5a6">Down</text>
+    </g>
+
+    <g transform="translate(580, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I2</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Contraflow</text>
+    </g>
+
+    <g transform="translate(660, 30)">
+      <polygon points="0,-15 15,15 -15,15" class="backup-node"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">I3</text>
+      <text x="0" y="35" text-anchor="middle" class="small-label" fill="#27ae60">Alt Route</text>
+    </g>
+
+    <!-- Recovery links -->
+    <path d="M 515 30 Q 540 50 565 50 L 645 50 Q 655 40 660 30" class="mesh-link"/>
+    <path d="M 595 30 L 645 30" class="mesh-link"/>
+    <text x="595" y="65" class="small-label" fill="#27ae60">AI reroute</text>
+  </g>
+
+  <!-- Coordination Layer -->
+  <g transform="translate(50, 510)">
+    <rect x="0" y="0" width="800" height="80" rx="5" fill="#9b59b6" opacity="0.1" stroke="#8e44ad" stroke-width="2"/>
+    <text x="400" y="25" text-anchor="middle" class="subtitle" fill="#8e44ad">Macula Mega-Brain Coordination Layer</text>
+
+    <g transform="translate(100, 40)">
+      <circle cx="0" cy="0" r="8" fill="#3498db"/>
+      <text x="15" y="5" class="small-label">Power AI: Evolved islanding strategy</text>
+    </g>
+
+    <g transform="translate(350, 40)">
+      <circle cx="0" cy="0" r="8" fill="#3498db"/>
+      <text x="15" y="5" class="small-label">Water AI: Detected pipe break, activated backup</text>
+    </g>
+
+    <g transform="translate(620, 40)">
+      <circle cx="0" cy="0" r="8" fill="#3498db"/>
+      <text x="15" y="5" class="small-label">Traffic AI: Contraflow + reroute</text>
+    </g>
+
+    <!-- Mesh connections between AIs -->
+    <path d="M 108 555 L 358 555" stroke="#9b59b6" stroke-width="1.5" fill="none" opacity="0.5"/>
+    <path d="M 358 555 L 628 555" stroke="#9b59b6" stroke-width="1.5" fill="none" opacity="0.5"/>
+  </g>
+
+  <!-- Results Summary -->
+  <g transform="translate(50, 620)">
+    <text x="0" y="0" class="label">Results After Coordinated Attack:</text>
+
+    <g transform="translate(0, 20)">
+      <rect x="0" y="0" width="250" height="50" rx="3" fill="#e74c3c" opacity="0.1" stroke="#c0392b" stroke-width="2"/>
+      <text x="125" y="20" text-anchor="middle" class="small-label">Without Mega-Brain</text>
+      <text x="125" y="35" text-anchor="middle" class="small-label" fill="#e74c3c">❌ Cascading failure</text>
+      <text x="125" y="48" text-anchor="middle" class="small-label" fill="#e74c3c">3/3 systems down</text>
+    </g>
+
+    <g transform="translate(280, 20)">
+      <rect x="0" y="0" width="250" height="50" rx="3" fill="#27ae60" opacity="0.1" stroke="#229954" stroke-width="2"/>
+      <text x="125" y="20" text-anchor="middle" class="small-label">With Mega-Brain</text>
+      <text x="125" y="35" text-anchor="middle" class="small-label" fill="#27ae60">✓ Graceful degradation</text>
+      <text x="125" y="48" text-anchor="middle" class="small-label" fill="#27ae60">3/3 systems 70% operational</text>
+    </g>
+
+    <g transform="translate(560, 20)">
+      <rect x="0" y="0" width="220" height="50" rx="3" fill="#3498db" opacity="0.1" stroke="#2980b9" stroke-width="2"/>
+      <text x="110" y="20" text-anchor="middle" class="small-label">Recovery Time</text>
+      <text x="110" y="35" text-anchor="middle" class="small-label" fill="#3498db">30 min (autonomous)</text>
+      <text x="110" y="48" text-anchor="middle" class="small-label">vs 8 hrs (manual)</text>
+    </g>
+  </g>
+</svg>

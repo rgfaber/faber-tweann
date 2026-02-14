@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="ltcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cfcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#34d399;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="stateGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fbbf24;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.2"/>
+    </filter>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10b981"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#1e293b">LTC Neuron Architecture in faber-tweann</text>
+  <text x="400" y="55" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#64748b">Liquid Time-Constant Neurons with Closed-form Continuous-time (CfC) Approximation</text>
+
+  <!-- Input Section -->
+  <g transform="translate(50, 100)">
+    <rect x="0" y="0" width="120" height="160" rx="8" fill="#e0e7ff" stroke="#818cf8" stroke-width="2" filter="url(#shadow)"/>
+    <text x="60" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#4338ca">Inputs</text>
+
+    <!-- Input nodes -->
+    <circle cx="60" cy="55" r="15" fill="#6366f1"/>
+    <text x="60" y="60" text-anchor="middle" font-family="monospace" font-size="12" fill="white">I₁</text>
+
+    <circle cx="60" cy="95" r="15" fill="#6366f1"/>
+    <text x="60" y="100" text-anchor="middle" font-family="monospace" font-size="12" fill="white">I₂</text>
+
+    <circle cx="60" cy="135" r="15" fill="#6366f1"/>
+    <text x="60" y="140" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Iₙ</text>
+
+    <text x="60" y="115" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#6366f1">⋮</text>
+  </g>
+
+  <!-- Aggregation -->
+  <g transform="translate(200, 140)">
+    <rect x="0" y="0" width="100" height="80" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+    <text x="50" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#1d4ed8">Weighted</text>
+    <text x="50" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#1d4ed8">Sum</text>
+    <text x="50" y="65" text-anchor="middle" font-family="monospace" font-size="12" fill="#3b82f6">Σ wᵢ·xᵢ</text>
+  </g>
+
+  <!-- Arrow from inputs to aggregation -->
+  <line x1="170" y1="180" x2="195" y2="180" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- LTC Core Box -->
+  <g transform="translate(330, 90)">
+    <rect x="0" y="0" width="200" height="180" rx="12" fill="url(#ltcGradient)" stroke="#4f46e5" stroke-width="2" filter="url(#shadow)"/>
+    <text x="100" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">LTC Dynamics Core</text>
+
+    <!-- Internal state circle -->
+    <circle cx="100" cy="70" r="25" fill="url(#stateGradient)" stroke="#d97706" stroke-width="2"/>
+    <text x="100" y="68" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="white">x(t)</text>
+    <text x="100" y="82" text-anchor="middle" font-family="monospace" font-size="9" fill="white">state</text>
+
+    <!-- Parameters -->
+    <g transform="translate(20, 110)">
+      <rect x="0" y="0" width="70" height="55" rx="4" fill="rgba(255,255,255,0.2)"/>
+      <text x="35" y="15" text-anchor="middle" font-family="monospace" font-size="10" fill="white">τ (tau)</text>
+      <text x="35" y="30" text-anchor="middle" font-family="monospace" font-size="9" fill="#e0e7ff">time const</text>
+      <text x="35" y="45" text-anchor="middle" font-family="monospace" font-size="10" fill="white">A (bound)</text>
+    </g>
+
+    <g transform="translate(110, 110)">
+      <rect x="0" y="0" width="70" height="55" rx="4" fill="rgba(255,255,255,0.2)"/>
+      <text x="35" y="15" text-anchor="middle" font-family="monospace" font-size="10" fill="white">f() backbone</text>
+      <text x="35" y="30" text-anchor="middle" font-family="monospace" font-size="10" fill="white">h() head</text>
+      <text x="35" y="45" text-anchor="middle" font-family="monospace" font-size="9" fill="#e0e7ff">networks</text>
+    </g>
+  </g>
+
+  <!-- Arrow from aggregation to LTC -->
+  <line x1="300" y1="180" x2="325" y2="180" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- CfC Equation Box -->
+  <g transform="translate(560, 120)">
+    <rect x="0" y="0" width="180" height="120" rx="8" fill="url(#cfcGradient)" stroke="#059669" stroke-width="2" filter="url(#shadow)"/>
+    <text x="90" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" fill="white">CfC Update</text>
+
+    <text x="90" y="55" text-anchor="middle" font-family="monospace" font-size="11" fill="white">x_new = σ(-f)·x</text>
+    <text x="90" y="75" text-anchor="middle" font-family="monospace" font-size="11" fill="white">+ (1-σ(-f))·h</text>
+
+    <text x="90" y="100" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#d1fae5">~100x faster than ODE</text>
+  </g>
+
+  <!-- Arrow from LTC to CfC -->
+  <line x1="530" y1="180" x2="555" y2="180" stroke="#10b981" stroke-width="2" marker-end="url(#arrowhead-green)"/>
+
+  <!-- Output -->
+  <g transform="translate(650, 280)">
+    <circle cx="40" cy="30" r="30" fill="#10b981" stroke="#059669" stroke-width="2" filter="url(#shadow)"/>
+    <text x="40" y="27" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="white">y(t)</text>
+    <text x="40" y="42" text-anchor="middle" font-family="sans-serif" font-size="9" fill="white">output</text>
+  </g>
+
+  <!-- Arrow from CfC to output -->
+  <path d="M 650 240 Q 670 260 690 280" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrowhead-green)"/>
+
+  <!-- State feedback loop -->
+  <path d="M 430 270 L 430 320 L 320 320 L 320 160 L 325 160" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowhead)"/>
+  <text x="375" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#d97706">State Persistence</text>
+
+  <!-- Legend -->
+  <g transform="translate(50, 380)">
+    <rect x="0" y="0" width="700" height="100" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="350" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#475569">Key Equations &amp; Concepts</text>
+
+    <g transform="translate(20, 35)">
+      <text x="0" y="12" font-family="monospace" font-size="11" fill="#1e293b">LTC ODE:</text>
+      <text x="70" y="12" font-family="monospace" font-size="11" fill="#6366f1">dx/dt = -[1/τ + f(x,I,θ)]·x + f(x,I,θ)·A</text>
+    </g>
+
+    <g transform="translate(20, 55)">
+      <text x="0" y="12" font-family="monospace" font-size="11" fill="#1e293b">CfC:</text>
+      <text x="70" y="12" font-family="monospace" font-size="11" fill="#10b981">x(t+Δt) = σ(-f)·x(t) + (1-σ(-f))·h</text>
+      <text x="400" y="12" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">(Closed-form approximation)</text>
+    </g>
+
+    <g transform="translate(20, 75)">
+      <rect x="0" y="0" width="12" height="12" fill="#f59e0b" rx="2"/>
+      <text x="20" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">x(t) = Internal state (persistent across evaluations)</text>
+
+      <rect x="250" y="0" width="12" height="12" fill="#6366f1" rx="2"/>
+      <text x="270" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">τ = Time constant (evolvable)</text>
+
+      <rect x="450" y="0" width="12" height="12" fill="#10b981" rx="2"/>
+      <text x="470" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#1e293b">CfC = Fast closed-form mode</text>
+    </g>
+  </g>
+
+  <!-- Attribution -->
+  <text x="400" y="495" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Based on Hasani et al. (2021) "Liquid Time-constant Networks" &amp; (2022) "Closed-form Continuous-time Neural Networks"</text>
+</svg>

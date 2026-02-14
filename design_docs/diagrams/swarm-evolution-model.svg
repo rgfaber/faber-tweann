@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .node-box { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .high-fitness { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .low-fitness { fill: #e74c3c; stroke: #c0392b; stroke-width: 2; }
+      .medium-fitness { fill: #f39c12; stroke: #d68910; stroke-width: 2; }
+      .migration-arrow { stroke: #9b59b6; stroke-width: 3; fill: none; marker-end: url(#arrowhead-purple); stroke-dasharray: 5,5; }
+      .genotype { fill: #1abc9c; stroke: #16a085; stroke-width: 2; }
+      .dht-cloud { fill: #ecf0f1; stroke: #95a5a6; stroke-width: 2; stroke-dasharray: 3,3; }
+    </style>
+    <marker id="arrowhead-purple" markerWidth="12" markerHeight="12" refX="10" refY="3" orient="auto">
+      <polygon points="0 0, 12 3, 0 6" fill="#9b59b6" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title">Model 3: Swarm Evolution</text>
+  <text x="400" y="50" text-anchor="middle" class="subtitle">Networks migrate to nodes where they perform best</text>
+
+  <!-- DHT Cloud -->
+  <ellipse cx="400" cy="300" rx="360" ry="220" class="dht-cloud"/>
+  <text x="400" y="130" text-anchor="middle" class="label">Macula DHT (Genotype Advertisement)</text>
+
+  <!-- Time Step 1 Label -->
+  <text x="50" y="100" class="label" fill="#7f8c8d">t=0: Initial Distribution</text>
+
+  <!-- Node A (High Fitness Problem) - Top Left -->
+  <g transform="translate(80, 160)">
+    <rect width="160" height="120" rx="5" class="high-fitness"/>
+    <text x="80" y="20" text-anchor="middle" class="label" fill="white">Node A (Robotics)</text>
+    <text x="80" y="38" text-anchor="middle" class="small-label" fill="white">Problem: Path Planning</text>
+
+    <!-- Genotype G1 -->
+    <g transform="translate(30, 50)">
+      <circle cx="0" cy="0" r="15" class="genotype"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">G1</text>
+      <text x="0" y="25" text-anchor="middle" class="small-label" fill="#27ae60">F: 0.92</text>
+    </g>
+
+    <!-- Genotype G2 -->
+    <g transform="translate(100, 50)">
+      <circle cx="0" cy="0" r="15" class="genotype"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">G2</text>
+      <text x="0" y="25" text-anchor="middle" class="small-label" fill="#27ae60">F: 0.88</text>
+    </g>
+
+    <text x="80" y="100" text-anchor="middle" class="small-label" fill="white">✓ High fitness here</text>
+  </g>
+
+  <!-- Node B (Medium Fitness Problem) - Top Right -->
+  <g transform="translate(560, 160)">
+    <rect width="160" height="120" rx="5" class="medium-fitness"/>
+    <text x="80" y="20" text-anchor="middle" class="label" fill="white">Node B (Trading)</text>
+    <text x="80" y="38" text-anchor="middle" class="small-label" fill="white">Problem: Forex</text>
+
+    <!-- Genotype G3 -->
+    <g transform="translate(65, 50)">
+      <circle cx="0" cy="0" r="15" class="genotype"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">G3</text>
+      <text x="0" y="25" text-anchor="middle" class="small-label" fill="#f39c12">F: 0.65</text>
+    </g>
+
+    <text x="80" y="100" text-anchor="middle" class="small-label" fill="white">⚠ Medium fitness</text>
+  </g>
+
+  <!-- Node C (Low Fitness Problem) - Bottom Left -->
+  <g transform="translate(80, 420)">
+    <rect width="160" height="120" rx="5" class="low-fitness"/>
+    <text x="80" y="20" text-anchor="middle" class="label" fill="white">Node C (Game AI)</text>
+    <text x="80" y="38" text-anchor="middle" class="small-label" fill="white">Problem: Strategy</text>
+
+    <!-- Genotype G4 -->
+    <g transform="translate(65, 50)">
+      <circle cx="0" cy="0" r="15" class="genotype"/>
+      <text x="0" y="5" text-anchor="middle" class="small-label" fill="white">G4</text>
+      <text x="0" y="25" text-anchor="middle" class="small-label" fill="#e74c3c">F: 0.42</text>
+    </g>
+
+    <text x="80" y="100" text-anchor="middle" class="small-label" fill="white">✗ Low fitness here</text>
+  </g>
+
+  <!-- Node D (Empty) - Bottom Right -->
+  <g transform="translate(560, 420)">
+    <rect width="160" height="120" rx="5" class="node-box"/>
+    <text x="80" y="20" text-anchor="middle" class="label" fill="white">Node D (IoT)</text>
+    <text x="80" y="38" text-anchor="middle" class="small-label" fill="white">Problem: Sensor Fusion</text>
+
+    <text x="80" y="75" text-anchor="middle" class="small-label" fill="white">(Empty - awaiting genotypes)</text>
+  </g>
+
+  <!-- Migration Arrow 1: G1 advertises high fitness -->
+  <path d="M 160 200 Q 300 180 400 160" class="migration-arrow"/>
+  <text x="260" y="175" class="small-label" fill="#9b59b6">Advertise: G1</text>
+  <text x="260" y="190" class="small-label" fill="#27ae60">F=0.92, Problem=Robotics</text>
+
+  <!-- Migration Arrow 2: G4 discovers and migrates -->
+  <path d="M 240 480 Q 400 520 560 480" class="migration-arrow"/>
+  <text x="360" y="530" class="small-label" fill="#9b59b6">G4 migrates to Node D</text>
+  <text x="360" y="545" class="small-label" fill="#7f8c8d">(seeking better problem fit)</text>
+
+  <!-- Migration Arrow 3: Node C requests G1 -->
+  <path d="M 160 480 Q 120 300 160 220" class="migration-arrow"/>
+  <text x="60" y="350" class="small-label" fill="#9b59b6">Request G1</text>
+
+  <!-- Time indicator -->
+  <g transform="translate(320, 350)">
+    <rect x="0" y="0" width="160" height="60" rx="5" fill="#34495e" stroke="#2c3e50" stroke-width="2"/>
+    <text x="80" y="25" text-anchor="middle" class="label" fill="white">DHT Query</text>
+    <text x="80" y="42" text-anchor="middle" class="small-label" fill="#ecf0f1">O(log N) lookup</text>
+    <text x="80" y="55" text-anchor="middle" class="small-label" fill="#ecf0f1">for best genotype</text>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(280, 570)">
+    <circle cx="0" cy="-3" r="6" fill="#27ae60"/>
+    <text x="12" y="0" class="small-label">High Fitness</text>
+
+    <circle cx="100" cy="-3" r="6" fill="#f39c12"/>
+    <text x="112" y="0" class="small-label">Medium</text>
+
+    <circle cx="180" cy="-3" r="6" fill="#e74c3c"/>
+    <text x="192" y="0" class="small-label">Low Fitness</text>
+  </g>
+</svg>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #2c3e50; }
+      .subtitle { font: 14px sans-serif; fill: #34495e; }
+      .label { font: 12px sans-serif; fill: #2c3e50; }
+      .small-label { font: 10px sans-serif; fill: #7f8c8d; }
+      .layer-label { font: bold 14px sans-serif; fill: #2c3e50; }
+      .macula-layer { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .tweann-layer { fill: #9b59b6; stroke: #8e44ad; stroke-width: 2; }
+      .app-layer { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .node { fill: #1abc9c; stroke: #16a085; stroke-width: 1.5; }
+      .connection { stroke: #e74c3c; stroke-width: 1.5; fill: none; }
+      .dashed-connection { stroke: #95a5a6; stroke-width: 1; fill: none; stroke-dasharray: 3,3; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" class="title">Distributed Mega-Brain Architecture</text>
+  <text x="450" y="55" text-anchor="middle" class="subtitle">Planet-scale evolutionary intelligence on Macula HTTP/3 mesh</text>
+
+  <!-- Layer 1: Application Layer -->
+  <g transform="translate(50, 90)">
+    <rect width="800" height="100" rx="5" class="app-layer" opacity="0.2"/>
+    <text x="10" y="25" class="layer-label" fill="#27ae60">Application Layer</text>
+
+    <!-- Application Nodes -->
+    <g transform="translate(200, 40)">
+      <rect x="0" y="0" width="120" height="50" rx="3" fill="#27ae60" stroke="#229954" stroke-width="2"/>
+      <text x="60" y="18" text-anchor="middle" class="small-label" fill="white">IoT Sensors</text>
+      <text x="60" y="32" text-anchor="middle" class="small-label" fill="white">Robot Control</text>
+      <text x="60" y="46" text-anchor="middle" class="small-label" fill="white">Game AI</text>
+    </g>
+
+    <g transform="translate(350, 40)">
+      <rect x="0" y="0" width="120" height="50" rx="3" fill="#27ae60" stroke="#229954" stroke-width="2"/>
+      <text x="60" y="18" text-anchor="middle" class="small-label" fill="white">Trading Bots</text>
+      <text x="60" y="32" text-anchor="middle" class="small-label" fill="white">Navigation</text>
+      <text x="60" y="46" text-anchor="middle" class="small-label" fill="white">Forecasting</text>
+    </g>
+
+    <g transform="translate(500, 40)">
+      <rect x="0" y="0" width="120" height="50" rx="3" fill="#27ae60" stroke="#229954" stroke-width="2"/>
+      <text x="60" y="18" text-anchor="middle" class="small-label" fill="white">Scientific</text>
+      <text x="60" y="32" text-anchor="middle" class="small-label" fill="white">Research</text>
+      <text x="60" y="46" text-anchor="middle" class="small-label" fill="white">Simulation</text>
+    </g>
+  </g>
+
+  <!-- Layer 2: TWEANN Layer -->
+  <g transform="translate(50, 220)">
+    <rect width="800" height="120" rx="5" class="tweann-layer" opacity="0.2"/>
+    <text x="10" y="25" class="layer-label" fill="#9b59b6">TWEANN Evolution Layer</text>
+
+    <!-- TWEANN Components -->
+    <g transform="translate(80, 45)">
+      <rect x="0" y="0" width="130" height="65" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+      <text x="65" y="18" text-anchor="middle" class="small-label" fill="white">Population</text>
+      <text x="65" y="32" text-anchor="middle" class="small-label" fill="white">Monitor</text>
+      <line x1="15" y1="40" x2="115" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="65" y="52" text-anchor="middle" class="small-label" fill="white">20 agents</text>
+      <text x="65" y="62" text-anchor="middle" class="small-label" fill="white">Gen 142</text>
+    </g>
+
+    <g transform="translate(240, 45)">
+      <rect x="0" y="0" width="130" height="65" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+      <text x="65" y="18" text-anchor="middle" class="small-label" fill="white">Genome</text>
+      <text x="65" y="32" text-anchor="middle" class="small-label" fill="white">Mutator</text>
+      <line x1="15" y1="40" x2="115" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="65" y="52" text-anchor="middle" class="small-label" fill="white">Mutations:</text>
+      <text x="65" y="62" text-anchor="middle" class="small-label" fill="white">+neuron, ±weight</text>
+    </g>
+
+    <g transform="translate(400, 45)">
+      <rect x="0" y="0" width="130" height="65" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+      <text x="65" y="18" text-anchor="middle" class="small-label" fill="white">Macula</text>
+      <text x="65" y="32" text-anchor="middle" class="small-label" fill="white">Bridge</text>
+      <line x1="15" y1="40" x2="115" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="65" y="52" text-anchor="middle" class="small-label" fill="white">Pub/Sub</text>
+      <text x="65" y="62" text-anchor="middle" class="small-label" fill="white">Genotypes</text>
+    </g>
+
+    <g transform="translate(560, 45)">
+      <rect x="0" y="0" width="130" height="65" rx="3" fill="#9b59b6" stroke="#8e44ad" stroke-width="2"/>
+      <text x="65" y="18" text-anchor="middle" class="small-label" fill="white">Genotype</text>
+      <text x="65" y="32" text-anchor="middle" class="small-label" fill="white">Store (Mnesia)</text>
+      <line x1="15" y1="40" x2="115" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="65" y="52" text-anchor="middle" class="small-label" fill="white">Local</text>
+      <text x="65" y="62" text-anchor="middle" class="small-label" fill="white">Persistence</text>
+    </g>
+
+    <!-- Connections between TWEANN components -->
+    <path d="M 210 77 L 240 77" class="connection"/>
+    <path d="M 370 77 L 400 77" class="connection"/>
+    <path d="M 530 77 L 560 77" class="connection"/>
+  </g>
+
+  <!-- Layer 3: Macula Mesh Layer -->
+  <g transform="translate(50, 370)">
+    <rect width="800" height="140" rx="5" class="macula-layer" opacity="0.2"/>
+    <text x="10" y="25" class="layer-label" fill="#3498db">Macula HTTP/3 Mesh Layer</text>
+
+    <!-- Macula Components -->
+    <g transform="translate(60, 45)">
+      <rect x="0" y="0" width="100" height="80" rx="3" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+      <text x="50" y="18" text-anchor="middle" class="small-label" fill="white">DHT</text>
+      <text x="50" y="32" text-anchor="middle" class="small-label" fill="white">(Kademlia)</text>
+      <line x1="10" y1="40" x2="90" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="50" y="52" text-anchor="middle" class="small-label" fill="white">Service</text>
+      <text x="50" y="64" text-anchor="middle" class="small-label" fill="white">Discovery</text>
+      <text x="50" y="76" text-anchor="middle" class="small-label" fill="white">O(log N)</text>
+    </g>
+
+    <g transform="translate(190, 45)">
+      <rect x="0" y="0" width="100" height="80" rx="3" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+      <text x="50" y="18" text-anchor="middle" class="small-label" fill="white">Pub/Sub</text>
+      <line x1="10" y1="25" x2="90" y2="25" stroke="white" stroke-width="0.5"/>
+      <text x="50" y="38" text-anchor="middle" class="small-label" fill="white">Topics:</text>
+      <text x="50" y="50" text-anchor="middle" class="small-label" fill="white">genotypes</text>
+      <text x="50" y="62" text-anchor="middle" class="small-label" fill="white">fitness</text>
+      <text x="50" y="74" text-anchor="middle" class="small-label" fill="white">events</text>
+    </g>
+
+    <g transform="translate(320, 45)">
+      <rect x="0" y="0" width="100" height="80" rx="3" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+      <text x="50" y="18" text-anchor="middle" class="small-label" fill="white">RPC</text>
+      <line x1="10" y1="25" x2="90" y2="25" stroke="white" stroke-width="0.5"/>
+      <text x="50" y="38" text-anchor="middle" class="small-label" fill="white">Methods:</text>
+      <text x="50" y="50" text-anchor="middle" class="small-label" fill="white">get_genotype</text>
+      <text x="50" y="62" text-anchor="middle" class="small-label" fill="white">evaluate</text>
+      <text x="50" y="74" text-anchor="middle" class="small-label" fill="white">migrate</text>
+    </g>
+
+    <g transform="translate(450, 45)">
+      <rect x="0" y="0" width="100" height="80" rx="3" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+      <text x="50" y="18" text-anchor="middle" class="small-label" fill="white">Realm</text>
+      <text x="50" y="32" text-anchor="middle" class="small-label" fill="white">Isolation</text>
+      <line x1="10" y1="40" x2="90" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="50" y="52" text-anchor="middle" class="small-label" fill="white">Multi-</text>
+      <text x="50" y="64" text-anchor="middle" class="small-label" fill="white">tenancy</text>
+      <text x="50" y="76" text-anchor="middle" class="small-label" fill="white">Security</text>
+    </g>
+
+    <g transform="translate(580, 45)">
+      <rect x="0" y="0" width="100" height="80" rx="3" fill="#3498db" stroke="#2980b9" stroke-width="2"/>
+      <text x="50" y="18" text-anchor="middle" class="small-label" fill="white">HTTP/3</text>
+      <text x="50" y="32" text-anchor="middle" class="small-label" fill="white">QUIC</text>
+      <line x1="10" y1="40" x2="90" y2="40" stroke="white" stroke-width="0.5"/>
+      <text x="50" y="52" text-anchor="middle" class="small-label" fill="white">NAT-friendly</text>
+      <text x="50" y="64" text-anchor="middle" class="small-label" fill="white">Multiplexed</text>
+      <text x="50" y="76" text-anchor="middle" class="small-label" fill="white">Fast</text>
+    </g>
+  </g>
+
+  <!-- Layer 4: Network Layer -->
+  <g transform="translate(50, 540)">
+    <rect width="800" height="100" rx="5" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="2" opacity="0.3"/>
+    <text x="10" y="25" class="layer-label" fill="#7f8c8d">Network Layer (Internet)</text>
+
+    <!-- Global Nodes -->
+    <g transform="translate(100, 45)">
+      <circle cx="30" cy="25" r="20" class="node"/>
+      <text x="30" y="30" text-anchor="middle" class="small-label" fill="white">Berlin</text>
+    </g>
+
+    <g transform="translate(220, 45)">
+      <circle cx="30" cy="25" r="20" class="node"/>
+      <text x="30" y="30" text-anchor="middle" class="small-label" fill="white">Tokyo</text>
+    </g>
+
+    <g transform="translate(340, 45)">
+      <circle cx="30" cy="25" r="20" class="node"/>
+      <text x="30" y="30" text-anchor="middle" class="small-label" fill="white">NYC</text>
+    </g>
+
+    <g transform="translate(460, 45)">
+      <circle cx="30" cy="25" r="20" class="node"/>
+      <text x="30" y="30" text-anchor="middle" class="small-label" fill="white">Sydney</text>
+    </g>
+
+    <g transform="translate(580, 45)">
+      <circle cx="30" cy="25" r="20" class="node"/>
+      <text x="30" y="30" text-anchor="middle" class="small-label" fill="white">...1000s</text>
+    </g>
+
+    <!-- Global connections -->
+    <path d="M 130 610 Q 180 610 250 610" class="dashed-connection"/>
+    <path d="M 250 610 Q 310 610 370 610" class="dashed-connection"/>
+    <path d="M 370 610 Q 430 610 490 610" class="dashed-connection"/>
+    <path d="M 490 610 Q 550 610 610 610" class="dashed-connection"/>
+  </g>
+
+  <!-- Vertical connections between layers -->
+  <path d="M 450 190 L 450 220" class="connection" marker-end="url(#arrow-down)"/>
+  <path d="M 450 340 L 450 370" class="connection" marker-end="url(#arrow-down)"/>
+  <path d="M 450 510 L 450 540" class="connection" marker-end="url(#arrow-down)"/>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrow-down" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#e74c3c" />
+    </marker>
+  </defs>
+
+  <!-- Key metrics box -->
+  <g transform="translate(650, 670)">
+    <rect x="0" y="0" width="200" height="25" rx="3" fill="#34495e" opacity="0.8"/>
+    <text x="100" y="17" text-anchor="middle" class="small-label" fill="white">Planetary Scale: 1000s of nodes, millions of agents</text>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(50, 665)">
+    <text x="0" y="0" class="small-label">✓ Decentralized (no master)</text>
+    <text x="0" y="15" class="small-label">✓ Self-organizing (DHT discovery)</text>
+    <text x="200" y="0" class="small-label">✓ Fault-tolerant (BEAM + mesh)</text>
+    <text x="200" y="15" class="small-label">✓ NAT-friendly (HTTP/3/QUIC)</text>
+    <text x="420" y="0" class="small-label">✓ Privacy-preserving (local evolution)</text>
+    <text x="420" y="15" class="small-label">✓ Scalable (O(log N) routing)</text>
+  </g>
+</svg>

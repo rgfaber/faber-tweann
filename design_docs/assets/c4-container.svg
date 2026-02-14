@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #333; }
+      .container-box { fill: #1168bd; stroke: #0b4884; stroke-width: 2; }
+      .person-box { fill: #08427b; stroke: #052e56; stroke-width: 2; }
+      .external-box { fill: #999; stroke: #666; stroke-width: 2; }
+      .label { font: bold 14px sans-serif; fill: white; text-anchor: middle; }
+      .tech { font: italic 11px sans-serif; fill: white; text-anchor: middle; }
+      .desc { font: 11px sans-serif; fill: white; text-anchor: middle; }
+      .arrow { stroke: #666; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-label { font: 11px sans-serif; fill: #666; text-anchor: middle; }
+      .system-boundary { fill: none; stroke: #999; stroke-width: 2; stroke-dasharray: 5,5; }
+      .boundary-label { font: bold 14px sans-serif; fill: #666; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="500" y="30" class="title">Container Diagram - Faber TWEANN</text>
+  <text x="500" y="50" class="desc" style="fill: #666;">High-level architecture containers</text>
+
+  <!-- System Boundary -->
+  <rect x="40" y="80" width="920" height="540" rx="5" class="system-boundary"/>
+  <text x="60" y="105" class="boundary-label">Faber TWEANN System</text>
+
+  <!-- Developer -->
+  <rect x="70" y="150" width="160" height="100" rx="5" class="person-box"/>
+  <text x="150" y="180" class="label">Developer</text>
+  <text x="150" y="197" class="tech">[Person]</text>
+  <text x="150" y="220" class="desc">Creates agents,</text>
+  <text x="150" y="235" class="desc">runs evolution</text>
+
+  <!-- Genotype Store -->
+  <rect x="280" y="130" width="180" height="120" rx="5" class="container-box"/>
+  <text x="370" y="165" class="label">Genotype Store</text>
+  <text x="370" y="182" class="tech">[Mnesia Database]</text>
+  <text x="370" y="205" class="desc">Persists neural network</text>
+  <text x="370" y="220" class="desc">blueprints, records,</text>
+  <text x="370" y="235" class="desc">and metadata</text>
+
+  <!-- Genome Mutator -->
+  <rect x="500" y="130" width="180" height="120" rx="5" class="container-box"/>
+  <text x="590" y="165" class="label">Genome Mutator</text>
+  <text x="590" y="182" class="tech">[Erlang Module]</text>
+  <text x="590" y="205" class="desc">Applies mutations:</text>
+  <text x="590" y="220" class="desc">add/remove neurons,</text>
+  <text x="590" y="235" class="desc">modify weights</text>
+
+  <!-- Constructor -->
+  <rect x="720" y="130" width="180" height="120" rx="5" class="container-box"/>
+  <text x="810" y="165" class="label">Constructor</text>
+  <text x="810" y="182" class="tech">[Erlang Module]</text>
+  <text x="810" y="205" class="desc">Builds running process</text>
+  <text x="810" y="220" class="desc">networks (phenotypes)</text>
+  <text x="810" y="235" class="desc">from genotypes</text>
+
+  <!-- Network Runtime -->
+  <rect x="280" y="300" width="180" height="120" rx="5" class="container-box"/>
+  <text x="370" y="335" class="label">Network Runtime</text>
+  <text x="370" y="352" class="tech">[OTP Processes]</text>
+  <text x="370" y="375" class="desc">Cortex, sensors,</text>
+  <text x="370" y="390" class="desc">neurons, actuators</text>
+  <text x="370" y="405" class="desc">as linked processes</text>
+
+  <!-- Population Monitor -->
+  <rect x="500" y="300" width="180" height="120" rx="5" class="container-box"/>
+  <text x="590" y="335" class="label">Population Monitor</text>
+  <text x="590" y="352" class="tech">[gen_server]</text>
+  <text x="590" y="375" class="desc">Manages evolution:</text>
+  <text x="590" y="390" class="desc">selection, survival,</text>
+  <text x="590" y="405" class="desc">reproduction</text>
+
+  <!-- Morphology System -->
+  <rect x="720" y="300" width="180" height="120" rx="5" class="container-box"/>
+  <text x="810" y="335" class="label">Morphology System</text>
+  <text x="810" y="352" class="tech">[Erlang Module]</text>
+  <text x="810" y="375" class="desc">Problem-specific</text>
+  <text x="810" y="390" class="desc">sensors, actuators,</text>
+  <text x="810" y="405" class="desc">fitness functions</text>
+
+  <!-- Environment -->
+  <rect x="420" y="470" width="180" height="100" rx="5" class="external-box"/>
+  <text x="510" y="500" class="label">Environment</text>
+  <text x="510" y="517" class="tech">[External System]</text>
+  <text x="510" y="540" class="desc">Problem domain</text>
+  <text x="510" y="555" class="desc">(XOR, cart-pole, etc.)</text>
+
+  <!-- Arrows -->
+  <!-- Developer -> Genotype Store -->
+  <path d="M 230 190 L 280 190" class="arrow"/>
+  <text x="255" y="180" class="arrow-label">Constructs agents</text>
+
+  <!-- Genotype Store -> Genome Mutator -->
+  <path d="M 460 190 L 500 190" class="arrow"/>
+  <text x="480" y="180" class="arrow-label">Read/update</text>
+
+  <!-- Genome Mutator -> Genotype Store -->
+  <path d="M 500 210 L 460 210" class="arrow"/>
+  <text x="480" y="230" class="arrow-label">Mutated genes</text>
+
+  <!-- Genotype Store -> Constructor -->
+  <path d="M 460 150 L 720 150" class="arrow"/>
+  <text x="590" y="140" class="arrow-label">Genotype blueprint</text>
+
+  <!-- Constructor -> Network Runtime -->
+  <path d="M 810 250 L 810 280 L 370 280 L 370 300" class="arrow"/>
+  <text x="590" y="270" class="arrow-label">Spawns processes</text>
+
+  <!-- Network Runtime -> Population Monitor -->
+  <path d="M 460 360 L 500 360" class="arrow"/>
+  <text x="480" y="350" class="arrow-label">Fitness scores</text>
+
+  <!-- Population Monitor -> Genome Mutator -->
+  <path d="M 590 300 L 590 250" class="arrow"/>
+  <text x="630" y="275" class="arrow-label">Trigger mutations</text>
+
+  <!-- Morphology -> Network Runtime -->
+  <path d="M 720 360 L 460 360" class="arrow"/>
+  <text x="590" y="350" class="arrow-label">Sensor/actuator specs</text>
+
+  <!-- Network Runtime -> Environment -->
+  <path d="M 370 420 L 420 490" class="arrow"/>
+  <text x="370" y="455" class="arrow-label">Actions</text>
+
+  <!-- Environment -> Network Runtime -->
+  <path d="M 420 510 L 370 420" class="arrow"/>
+  <text x="330" y="465" class="arrow-label">Observations</text>
+</svg>
