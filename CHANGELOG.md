@@ -5,6 +5,30 @@ All notable changes to faber-tweann will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-16
+
+### Stable Release
+
+First stable release. All APIs are considered stable.
+
+### Features (stable since 0.x series)
+
+- **TWEANN Evolution**: Topology and weight evolution with NEAT-style speciation
+- **LTC Neurons**: Liquid Time-Constant neurons with adaptive temporal processing
+- **CfC Mode**: Closed-form continuous-time evaluation (~100x faster than ODE)
+- **Hybrid Networks**: Mix standard and LTC neurons in the same network
+- **Morphology Registry**: Extensible sensor/actuator specifications per problem domain
+- **Plasticity**: Hebbian, modulated Hebbian, STDP, Oja learning rules
+- **NIF Acceleration**: Optional Rust NIF support via `faber_nn_nifs` (10-200x speedup)
+- **Process Safety**: Timeouts, crash handling, comprehensive logging
+- **863 tests passing**
+
+### Changed
+
+- Bumped version to 1.0.0 for stable release
+
+---
+
 ## [0.1.0] - 2026-02-14
 
 ### Changed
@@ -236,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.0.0 | 2026-02-16 | Stable release, all APIs stable |
 | 0.17.0 | 2025-12-26 | 26 new NIF docs, v0.2.0 NIF support |
 | 0.16.1 | 2025-12-26 | Documentation regeneration |
 | 0.16.0 | 2024-12-12 | Enterprise NIF package, memory fix |

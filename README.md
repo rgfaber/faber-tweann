@@ -22,7 +22,7 @@ Evolutionary neural networks that evolve both topology and weights, now with **L
 
 ```erlang
 %% Add to rebar.config
-{deps, [{faber_tweann, "~> 0.17.0"}]}.
+{deps, [{faber_tweann, "~> 1.0"}]}.
 
 %% Create and evolve a standard network
 genotype:init_db(),

@@ -5,7 +5,6 @@ set -euo pipefail
 # Usage: ./scripts/publish-to-hex.sh
 #
 # Requires: ~/.config/rebar3/hex.config with api_key set
-# (run `rebar3 hex user auth` to set up, or set api_key directly)
 
 cd "$(dirname "$0")/.."
 
