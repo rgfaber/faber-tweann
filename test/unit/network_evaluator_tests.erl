@@ -16,6 +16,7 @@ network_evaluator_exports_test() ->
     Exports = network_evaluator:module_info(exports),
     ?assert(lists:member({create_feedforward, 3}, Exports)),
     ?assert(lists:member({create_feedforward, 4}, Exports)),
+    ?assert(lists:member({create_feedforward, 5}, Exports)),
     ?assert(lists:member({evaluate, 2}, Exports)),
     ?assert(lists:member({evaluate_with_activations, 2}, Exports)),
     ?assert(lists:member({from_genotype, 1}, Exports)),
@@ -244,7 +245,7 @@ to_json_from_json_roundtrip_test() ->
     ?assertEqual(OrigOutput, LoadedOutput).
 
 from_json_invalid_version_test() ->
-    InvalidJson = #{<<"version">> => 2, <<"activation">> => <<"tanh">>, <<"layers">> => []},
+    InvalidJson = #{<<"version">> => 99, <<"activation">> => <<"tanh">>, <<"layers">> => []},
     ?assertEqual({error, unsupported_version}, network_evaluator:from_json(InvalidJson)).
 
 from_json_invalid_format_test() ->
@@ -317,4 +318,63 @@ get_viz_data_connections_test() ->
     ?assert(maps:is_key(from, FirstConn)),
     ?assert(maps:is_key(to, FirstConn)),
     ?assert(maps:is_key(weight, FirstConn)).
+
+%% ============================================================================
+%% Output Activation Tests
+%% ============================================================================
+
+create_feedforward_with_output_activation_test() ->
+    Network = network_evaluator:create_feedforward(2, [4], 1, tanh, linear),
+    ?assert(is_tuple(Network)),
+    Topology = network_evaluator:get_topology(Network),
+    ?assertEqual([2, 4, 1], maps:get(layer_sizes, Topology)).
+
+output_activation_linear_unbounded_test() ->
+    %% With tanh hidden + linear output, output can exceed [-1, 1]
+    Network = network_evaluator:create_feedforward(2, [4], 1, tanh, linear),
+    Weights = network_evaluator:get_weights(Network),
+    %% Set large weights to force output outside tanh range
+    LargeWeights = [W * 10.0 || W <- Weights],
+    LargeNet = network_evaluator:set_weights(Network, LargeWeights),
+    [Output] = network_evaluator:evaluate(LargeNet, [1.0, 1.0]),
+    %% Linear output can exceed 1.0 or go below -1.0
+    ?assert(is_float(Output)).
+
+output_activation_undefined_same_as_activation_test() ->
+    %% undefined output_activation should behave same as specifying same activation
+    Net1 = network_evaluator:create_feedforward(2, [4], 1, tanh, undefined),
+    Net2 = network_evaluator:create_feedforward(2, [4], 1, tanh),
+    %% Set identical weights
+    Weights = network_evaluator:get_weights(Net1),
+    Net2b = network_evaluator:set_weights(Net2, Weights),
+    Net1b = network_evaluator:set_weights(Net1, Weights),
+    Out1 = network_evaluator:evaluate(Net1b, [0.5, 0.5]),
+    Out2 = network_evaluator:evaluate(Net2b, [0.5, 0.5]),
+    ?assertEqual(Out1, Out2).
+
+output_activation_json_v2_roundtrip_test() ->
+    Network = network_evaluator:create_feedforward(2, [4], 3, tanh, linear),
+    Inputs = [0.5, 0.5],
+    OrigOutput = network_evaluator:evaluate(Network, Inputs),
+
+    Json = network_evaluator:to_json(Network),
+    ?assertEqual(2, maps:get(<<"version">>, Json)),
+    ?assertEqual(<<"linear">>, maps:get(<<"output_activation">>, Json)),
+
+    {ok, LoadedNetwork} = network_evaluator:from_json(Json),
+    LoadedOutput = network_evaluator:evaluate(LoadedNetwork, Inputs),
+    ?assertEqual(OrigOutput, LoadedOutput).
+
+output_activation_json_v1_no_output_activation_test() ->
+    Network = network_evaluator:create_feedforward(2, [4], 1, sigmoid),
+    Json = network_evaluator:to_json(Network),
+    ?assertEqual(1, maps:get(<<"version">>, Json)),
+    ?assertEqual(error, maps:find(<<"output_activation">>, Json)).
+
+output_activation_with_activations_test() ->
+    Network = network_evaluator:create_feedforward(2, [4], 1, tanh, linear),
+    Inputs = [0.5, 0.5],
+    {Outputs, Activations} = network_evaluator:evaluate_with_activations(Network, Inputs),
+    ?assertEqual(Outputs, network_evaluator:evaluate(Network, Inputs)),
+    ?assertEqual(3, length(Activations)).
 

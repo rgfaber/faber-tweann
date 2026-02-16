@@ -22,6 +22,7 @@
 -export([
     create_feedforward/3,
     create_feedforward/4,
+    create_feedforward/5,
     evaluate/2,
     evaluate_with_activations/2,
     from_genotype/1,
@@ -43,6 +44,8 @@
 -record(network, {
     layers :: [layer()],
     activation :: atom(),
+    %% Optional: separate activation for output layer (undefined = same as activation)
+    output_activation :: atom() | undefined,
     %% Optional compiled NIF reference for fast evaluation
     compiled_ref :: reference() | undefined
 }).
@@ -60,18 +63,27 @@
 %% @returns Network record
 -spec create_feedforward(pos_integer(), [pos_integer()], pos_integer()) -> network().
 create_feedforward(InputSize, HiddenSizes, OutputSize) ->
-    create_feedforward(InputSize, HiddenSizes, OutputSize, tanh).
+    create_feedforward(InputSize, HiddenSizes, OutputSize, tanh, undefined).
 
 %% @doc Create a feedforward network with specified activation.
 -spec create_feedforward(pos_integer(), [pos_integer()], pos_integer(), atom()) -> network().
 create_feedforward(InputSize, HiddenSizes, OutputSize, Activation) ->
+    create_feedforward(InputSize, HiddenSizes, OutputSize, Activation, undefined).
+
+%% @doc Create a feedforward network with separate output activation.
+%%
+%% Hidden layers use Activation, output layer uses OutputActivation.
+%% If OutputActivation is undefined, all layers use Activation.
+-spec create_feedforward(pos_integer(), [pos_integer()], pos_integer(), atom(), atom() | undefined) -> network().
+create_feedforward(InputSize, HiddenSizes, OutputSize, Activation, OutputActivation) ->
     LayerSizes = [InputSize | HiddenSizes] ++ [OutputSize],
     Layers = create_layers(LayerSizes),
     %% NOTE: Do NOT compile for NIF here - lazy compilation prevents memory leaks.
     %% The compiled_ref holds a Rust ResourceArc that keeps native memory alive.
     %% Eager compilation causes memory to accumulate unboundedly across generations.
     %% Networks will use pure Erlang evaluation (fallback in evaluate/2).
-    #network{layers = Layers, activation = Activation, compiled_ref = undefined}.
+    #network{layers = Layers, activation = Activation,
+             output_activation = OutputActivation, compiled_ref = undefined}.
 
 %% @doc Evaluate the network with given inputs.
 %%
@@ -85,9 +97,11 @@ create_feedforward(InputSize, HiddenSizes, OutputSize, Activation) ->
 evaluate(#network{compiled_ref = CompiledRef}, Inputs) when CompiledRef =/= undefined ->
     %% Fast path: use NIF-compiled network
     tweann_nif:evaluate(CompiledRef, Inputs);
-evaluate(#network{layers = Layers, activation = Activation}, Inputs) ->
+evaluate(#network{layers = Layers, activation = Activation,
+                  output_activation = OutputActivation}, Inputs) ->
     %% Fallback: pure Erlang evaluation
-    forward_propagate(Layers, Inputs, Activation).
+    OA = resolve_output_activation(OutputActivation, Activation),
+    forward_propagate(Layers, Inputs, Activation, OA).
 
 %% @doc Load a network from a genotype stored in Mnesia.
 %%
@@ -183,11 +197,22 @@ create_layer(FromSize, ToSize) ->
     Biases = [(rand:uniform() * 0.2 - 0.1) || _ <- lists:seq(1, ToSize)],
     {Weights, Biases}.
 
-%% @private Forward propagate through all layers
-forward_propagate([], Activations, _Activation) ->
+%% @private Forward propagate with separate output layer activation.
+%% Hidden layers use Activation, the final layer uses OutputActivation.
+forward_propagate([], Activations, _Activation, _OutputActivation) ->
     Activations;
-forward_propagate([{Weights, Biases} | RestLayers], Inputs, Activation) ->
-    %% For each neuron: weighted sum of inputs + bias, then activation
+forward_propagate([{Weights, Biases}], Inputs, _Activation, OutputActivation) ->
+    %% Last layer — use output activation
+    lists:zipwith(
+        fun(NeuronWeights, Bias) ->
+            Sum = dot_product(NeuronWeights, Inputs) + Bias,
+            apply_activation(Sum, OutputActivation)
+        end,
+        Weights,
+        Biases
+    );
+forward_propagate([{Weights, Biases} | RestLayers], Inputs, Activation, OutputActivation) ->
+    %% Hidden layer — use regular activation
     Outputs = lists:zipwith(
         fun(NeuronWeights, Bias) ->
             Sum = dot_product(NeuronWeights, Inputs) + Bias,
@@ -196,7 +221,7 @@ forward_propagate([{Weights, Biases} | RestLayers], Inputs, Activation) ->
         Weights,
         Biases
     ),
-    forward_propagate(RestLayers, Outputs, Activation).
+    forward_propagate(RestLayers, Outputs, Activation, OutputActivation).
 
 %% @private Dot product of two vectors
 dot_product(Weights, Inputs) ->
@@ -213,6 +238,10 @@ apply_activation(X, linear) ->
     X;
 apply_activation(X, _) ->
     math:tanh(X).
+
+%% @private Resolve output activation: undefined means same as hidden activation
+resolve_output_activation(undefined, Activation) -> Activation;
+resolve_output_activation(OutputActivation, _Activation) -> OutputActivation.
 
 %% @private Reshape flat weights into matrix
 reshape_weights(FlatWeights, RowSize) ->
@@ -243,11 +272,13 @@ reshape_weights(Weights, RowSize, Acc) ->
 %% Only call this when you need maximum performance for a specific network
 %% that will be evaluated many times (e.g., the final champion network).
 -spec compile_for_nif(network()) -> network().
-compile_for_nif(Network = #network{layers = Layers, activation = Activation}) ->
+compile_for_nif(Network = #network{layers = Layers, activation = Activation,
+                                   output_activation = OutputActivation}) ->
     case tweann_nif:is_loaded() of
         true ->
             try
-                {Nodes, InputCount, OutputIndices} = build_nif_network(Layers, Activation),
+                OA = resolve_output_activation(OutputActivation, Activation),
+                {Nodes, InputCount, OutputIndices} = build_nif_network(Layers, Activation, OA),
                 CompiledRef = tweann_nif:compile_network(Nodes, InputCount, OutputIndices),
                 Network#network{compiled_ref = CompiledRef}
             catch
@@ -265,20 +296,27 @@ compile_for_nif(Network = #network{layers = Layers, activation = Activation}) ->
 %% topological order (inputs first, then hidden layers, then outputs).
 %%
 %% Node format: {Index, Type, Activation, Bias, [{FromIndex, Weight}, ...]}
--spec build_nif_network([layer()], atom()) ->
+-spec build_nif_network([layer()], atom(), atom()) ->
     {Nodes :: list(), InputCount :: non_neg_integer(), OutputIndices :: [non_neg_integer()]}.
-build_nif_network(Layers, Activation) ->
+build_nif_network(Layers, Activation, OutputActivation) ->
     LayerSizes = extract_layer_sizes(Layers),
     InputCount = hd(LayerSizes),
+    NumLayers = length(Layers),
 
     %% Build input nodes (no connections, linear activation)
     InputNodes = [{I, input, linear, 0.0, []} || I <- lists:seq(0, InputCount - 1)],
 
     %% Build hidden and output nodes layer by layer
     {HiddenOutputNodes, _} = lists:foldl(
-        fun({WeightMatrix, Biases}, {Acc, PrevLayerStart}) ->
+        fun({WeightMatrix, Biases}, {Acc, {PrevLayerStart, LayerNum}}) ->
             PrevLayerSize = length(hd(WeightMatrix)),
             CurrentLayerStart = PrevLayerStart + PrevLayerSize,
+
+            %% Use output activation for the last layer
+            LayerActivation = case LayerNum of
+                NumLayers -> OutputActivation;
+                _ -> Activation
+            end,
 
             %% Each row in WeightMatrix is weights for one neuron
             %% WeightMatrix[neuron][input] = weight from input to neuron
@@ -289,14 +327,14 @@ build_nif_network(Layers, Activation) ->
                                    || {I, W} <- lists:zip(
                                         lists:seq(0, length(NeuronWeights) - 1),
                                         NeuronWeights)],
-                    {NeuronIdx, hidden, Activation, Bias, Connections}
+                    {NeuronIdx, hidden, LayerActivation, Bias, Connections}
                 end,
                 WeightMatrix,
                 Biases
             ),
-            {Acc ++ NewNodes, CurrentLayerStart}
+            {Acc ++ NewNodes, {CurrentLayerStart, LayerNum + 1}}
         end,
-        {[], 0},
+        {[], {0, 1}},
         Layers
     ),
 
@@ -388,8 +426,10 @@ build_network_from_structure({Sensors, Neurons, Actuators}) ->
 %% activation vectors for each layer (including input and output).
 -spec evaluate_with_activations(network(), [float()]) ->
     {Outputs :: [float()], Activations :: [[float()]]}.
-evaluate_with_activations(#network{layers = Layers, activation = Activation}, Inputs) ->
-    {Outputs, Activations} = forward_propagate_with_activations(Layers, Inputs, Activation, [Inputs]),
+evaluate_with_activations(#network{layers = Layers, activation = Activation,
+                                   output_activation = OutputActivation}, Inputs) ->
+    OA = resolve_output_activation(OutputActivation, Activation),
+    {Outputs, Activations} = forward_propagate_with_activations(Layers, Inputs, Activation, OA, [Inputs]),
     {Outputs, lists:reverse(Activations)}.
 
 %% @doc Get network topology information for visualization.
@@ -436,10 +476,22 @@ get_viz_data(Network = #network{layers = Layers}, Inputs, InputLabels) ->
         outputs => Outputs
     }.
 
-%% @private Forward propagate and collect all activations
-forward_propagate_with_activations([], Activations, _Activation, AllActivations) ->
+%% @private Forward propagate and collect all activations with separate output activation.
+forward_propagate_with_activations([], Activations, _Activation, _OutputActivation, AllActivations) ->
     {Activations, AllActivations};
-forward_propagate_with_activations([{Weights, Biases} | RestLayers], Inputs, Activation, AllActivations) ->
+forward_propagate_with_activations([{Weights, Biases}], Inputs, _Activation, OutputActivation, AllActivations) ->
+    %% Last layer — use output activation
+    Outputs = lists:zipwith(
+        fun(NeuronWeights, Bias) ->
+            Sum = dot_product(NeuronWeights, Inputs) + Bias,
+            apply_activation(Sum, OutputActivation)
+        end,
+        Weights,
+        Biases
+    ),
+    {Outputs, [Outputs | AllActivations]};
+forward_propagate_with_activations([{Weights, Biases} | RestLayers], Inputs, Activation, OutputActivation, AllActivations) ->
+    %% Hidden layer — use regular activation
     Outputs = lists:zipwith(
         fun(NeuronWeights, Bias) ->
             Sum = dot_product(NeuronWeights, Inputs) + Bias,
@@ -448,7 +500,7 @@ forward_propagate_with_activations([{Weights, Biases} | RestLayers], Inputs, Act
         Weights,
         Biases
     ),
-    forward_propagate_with_activations(RestLayers, Outputs, Activation, [Outputs | AllActivations]).
+    forward_propagate_with_activations(RestLayers, Outputs, Activation, OutputActivation, [Outputs | AllActivations]).
 
 %% @private Extract layer sizes from weight matrices
 extract_layer_sizes([]) ->
@@ -559,18 +611,22 @@ hidden_labels(Size) ->
 %% @param Network The network record
 %% @returns Map suitable for JSON encoding
 -spec to_json(network()) -> map().
-to_json(#network{layers = Layers, activation = Activation}) ->
-    #{
-        <<"version">> => 1,
+to_json(#network{layers = Layers, activation = Activation, output_activation = OA}) ->
+    LayerList = [
+        #{<<"weights">> => Weights, <<"biases">> => Biases}
+        || {Weights, Biases} <- Layers
+    ],
+    Base = #{
         <<"activation">> => atom_to_binary(Activation, utf8),
-        <<"layers">> => [
-            #{
-                <<"weights">> => Weights,
-                <<"biases">> => Biases
-            }
-            || {Weights, Biases} <- Layers
-        ]
-    }.
+        <<"layers">> => LayerList
+    },
+    case OA of
+        undefined ->
+            Base#{<<"version">> => 1};
+        _ ->
+            Base#{<<"version">> => 2,
+                  <<"output_activation">> => atom_to_binary(OA, utf8)}
+    end.
 
 %% @doc Deserialize a network from a JSON-compatible map.
 %%
@@ -586,7 +642,25 @@ from_json(#{<<"version">> := 1, <<"activation">> := ActivationBin, <<"layers">> 
             {maps:get(<<"weights">>, L), maps:get(<<"biases">>, L)}
             || L <- LayerMaps
         ],
-        {ok, #network{layers = Layers, activation = Activation}}
+        {ok, #network{layers = Layers, activation = Activation,
+                      output_activation = undefined}}
+    catch
+        _:Reason ->
+            {error, {invalid_network_format, Reason}}
+    end;
+from_json(#{<<"version">> := 2, <<"activation">> := ActivationBin, <<"layers">> := LayerMaps} = Map) ->
+    try
+        Activation = binary_to_atom(ActivationBin, utf8),
+        OA = case maps:get(<<"output_activation">>, Map, undefined) of
+            undefined -> undefined;
+            OABin -> binary_to_atom(OABin, utf8)
+        end,
+        Layers = [
+            {maps:get(<<"weights">>, L), maps:get(<<"biases">>, L)}
+            || L <- LayerMaps
+        ],
+        {ok, #network{layers = Layers, activation = Activation,
+                      output_activation = OA}}
     catch
         _:Reason ->
             {error, {invalid_network_format, Reason}}
