@@ -1,6 +1,6 @@
 {application, faber_tweann,
  [{description, "Faber TWEANN - Topology and Weight Evolving Artificial Neural Networks"},
-  {vsn, "1.1.0"},
+  {vsn, "1.2.0"},
   {registered, [faber_tweann_sup, morphology_registry]},
   {mod, {faber_tweann_app, []}},
   {applications,

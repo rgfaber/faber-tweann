@@ -5,6 +5,29 @@ All notable changes to faber-tweann will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-17
+
+### Added
+
+- **CfC/LTC support in network_evaluator** for temporal reasoning in simple feedforward path
+  - `create_cfc_feedforward/5` — create networks with CfC hidden neurons (learnable tau, state_bound)
+  - `evaluate_with_state/2` — stateful evaluation that maintains CfC internal state across calls
+  - `reset_internal_state/1` — zero internal state at episode boundaries
+  - `get_neuron_meta/1` / `set_neuron_meta/2` — public API for CfC parameter access
+  - `forward_propagate_cfc/7` — per-neuron CfC evaluation via `tweann_nif:evaluate_cfc/4`
+- **v3 JSON serialization** — includes `neuron_meta` and `internal_state` fields, backward compatible with v1/v2
+
+---
+
+## [1.1.0] - 2026-02-16
+
+### Added
+
+- `output_activation` support — separate activation for output layer (`create_feedforward/5`)
+- v2 JSON serialization for output_activation
+
+---
+
 ## [1.0.0] - 2026-02-16
 
 ### Stable Release
