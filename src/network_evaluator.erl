@@ -23,13 +23,18 @@
     create_feedforward/3,
     create_feedforward/4,
     create_feedforward/5,
+    create_cfc_feedforward/5,
     evaluate/2,
+    evaluate_with_state/2,
     evaluate_with_activations/2,
     from_genotype/1,
     get_weights/1,
     set_weights/2,
     get_topology/1,
     get_viz_data/3,
+    reset_internal_state/1,
+    get_neuron_meta/1,
+    set_neuron_meta/2,
     %% Memory management
     strip_compiled_ref/1,
     %% NIF compilation (use sparingly - can cause memory leaks if networks accumulate)
@@ -47,11 +52,21 @@
     %% Optional: separate activation for output layer (undefined = same as activation)
     output_activation :: atom() | undefined,
     %% Optional compiled NIF reference for fast evaluation
-    compiled_ref :: reference() | undefined
+    compiled_ref :: reference() | undefined,
+    %% CfC neuron metadata per layer (undefined for standard feedforward)
+    neuron_meta :: [layer_meta()] | undefined,
+    %% CfC internal state per layer (updated after each evaluation)
+    internal_state :: [[float()]] | undefined
 }).
 
 -type layer() :: {Weights :: [[float()]], Biases :: [float()]}.
 -type network() :: #network{}.
+-type neuron_meta() :: #{
+    neuron_type := standard | cfc,
+    tau := float(),
+    state_bound := float()
+}.
+-type layer_meta() :: [neuron_meta()].
 
 -export_type([network/0]).
 
@@ -84,6 +99,86 @@ create_feedforward(InputSize, HiddenSizes, OutputSize, Activation, OutputActivat
     %% Networks will use pure Erlang evaluation (fallback in evaluate/2).
     #network{layers = Layers, activation = Activation,
              output_activation = OutputActivation, compiled_ref = undefined}.
+
+%% @doc Create a CfC feedforward network with random weights and CfC neuron metadata.
+%%
+%% Same layer structure as create_feedforward but hidden neurons are CfC type.
+%% Output neurons remain standard. CfC neurons use evaluate_cfc for temporal
+%% adaptation with learnable time constants.
+%%
+%% @param InputSize Number of inputs
+%% @param HiddenSizes List of hidden layer sizes
+%% @param OutputSize Number of outputs
+%% @param Activation Activation function for standard neurons
+%% @param OutputActivation Activation function for output layer
+%% @returns Network record with CfC metadata and zeroed internal state
+-spec create_cfc_feedforward(pos_integer(), [pos_integer()], pos_integer(), atom(), atom() | undefined) -> network().
+create_cfc_feedforward(InputSize, HiddenSizes, OutputSize, Activation, OutputActivation) ->
+    LayerSizes = [InputSize | HiddenSizes] ++ [OutputSize],
+    Layers = create_layers(LayerSizes),
+    %% Build neuron metadata: hidden layers are CfC, output layer is standard
+    HiddenMeta = [
+        [#{neuron_type => cfc,
+           tau => 0.1 + rand:uniform() * 1.9,        %% Random tau in [0.1, 2.0]
+           state_bound => 1.0}
+         || _ <- lists:seq(1, Size)]
+        || Size <- HiddenSizes
+    ],
+    OutputMeta = [#{neuron_type => standard, tau => 1.0, state_bound => 1.0}
+                  || _ <- lists:seq(1, OutputSize)],
+    NeuronMeta = HiddenMeta ++ [OutputMeta],
+    %% Initialize internal state to zeros for all layers
+    AllLayerSizes = HiddenSizes ++ [OutputSize],
+    InternalState = [lists:duplicate(Size, 0.0) || Size <- AllLayerSizes],
+    #network{layers = Layers, activation = Activation,
+             output_activation = OutputActivation, compiled_ref = undefined,
+             neuron_meta = NeuronMeta, internal_state = InternalState}.
+
+%% @doc Evaluate the network with stateful CfC processing.
+%%
+%% For standard feedforward networks (no neuron_meta), behaves identically
+%% to evaluate/2 but returns {Outputs, Network} tuple.
+%%
+%% For CfC networks, each CfC neuron updates its internal state based on
+%% the input-dependent time constant, enabling temporal reasoning.
+%%
+%% @param Network The network record
+%% @param Inputs List of input values
+%% @returns {Outputs, UpdatedNetwork} where UpdatedNetwork has updated internal state
+-spec evaluate_with_state(network(), [float()]) -> {[float()], network()}.
+evaluate_with_state(#network{neuron_meta = undefined} = Net, Inputs) ->
+    {evaluate(Net, Inputs), Net};
+evaluate_with_state(#network{layers = Layers, activation = Activation,
+                             output_activation = OutputActivation,
+                             neuron_meta = Meta, internal_state = State} = Net, Inputs) ->
+    OA = resolve_output_activation(OutputActivation, Activation),
+    {Outputs, NewState} = forward_propagate_cfc(Layers, Inputs, Activation, OA, Meta, State, []),
+    {Outputs, Net#network{internal_state = NewState}}.
+
+%% @doc Reset internal state of a CfC network to zeros.
+%%
+%% Call this at the start of each episode to prevent state leakage between
+%% independent evaluation sequences (e.g., between game rounds).
+-spec reset_internal_state(network()) -> network().
+reset_internal_state(#network{internal_state = undefined} = Net) ->
+    Net;
+reset_internal_state(#network{internal_state = State} = Net) ->
+    ZeroState = [lists:duplicate(length(S), 0.0) || S <- State],
+    Net#network{internal_state = ZeroState}.
+
+%% @doc Get neuron metadata from a CfC network.
+%%
+%% Returns undefined for standard feedforward networks.
+-spec get_neuron_meta(network()) -> [layer_meta()] | undefined.
+get_neuron_meta(#network{neuron_meta = Meta}) ->
+    Meta.
+
+%% @doc Set neuron metadata on a network.
+%%
+%% Used by mutation operators to update CfC parameters (tau, state_bound).
+-spec set_neuron_meta(network(), [layer_meta()] | undefined) -> network().
+set_neuron_meta(Net, Meta) ->
+    Net#network{neuron_meta = Meta}.
 
 %% @doc Evaluate the network with given inputs.
 %%
@@ -222,6 +317,46 @@ forward_propagate([{Weights, Biases} | RestLayers], Inputs, Activation, OutputAc
         Biases
     ),
     forward_propagate(RestLayers, Outputs, Activation, OutputActivation).
+
+%% @private CfC-aware forward propagation.
+%% Processes each layer with neuron metadata and internal state.
+forward_propagate_cfc([], Activations, _Act, _OA, [], [], AccState) ->
+    {Activations, lists:reverse(AccState)};
+forward_propagate_cfc([{Weights, Biases}], Inputs, _Act, OA,
+                      [LayerMeta], [LayerState], AccState) ->
+    %% Last layer — use output activation
+    {Outputs, NewLayerState} = evaluate_layer_cfc(
+        Weights, Biases, Inputs, OA, LayerMeta, LayerState),
+    {Outputs, lists:reverse([NewLayerState | AccState])};
+forward_propagate_cfc([{Weights, Biases} | RestLayers], Inputs, Act, OA,
+                      [LayerMeta | RestMeta], [LayerState | RestState], AccState) ->
+    %% Hidden layer — use regular activation
+    {Outputs, NewLayerState} = evaluate_layer_cfc(
+        Weights, Biases, Inputs, Act, LayerMeta, LayerState),
+    forward_propagate_cfc(RestLayers, Outputs, Act, OA,
+                          RestMeta, RestState, [NewLayerState | AccState]).
+
+%% @private Evaluate a single layer with per-neuron CfC support.
+evaluate_layer_cfc(Weights, Biases, Inputs, Activation, LayerMeta, LayerState) ->
+    lists:unzip(
+        evaluate_neurons_cfc(Weights, Biases, Inputs, Activation, LayerMeta, LayerState)
+    ).
+
+%% @private Process neurons in a layer, handling CfC and standard types.
+evaluate_neurons_cfc([], [], _Inputs, _Act, [], []) ->
+    [];
+evaluate_neurons_cfc([W|Ws], [B|Bs], Inputs, Act, [Meta|Ms], [State|Ss]) ->
+    Sum = dot_product(W, Inputs) + B,
+    {Output, NewState} = case maps:get(neuron_type, Meta) of
+        standard ->
+            {apply_activation(Sum, Act), State};
+        cfc ->
+            Tau = maps:get(tau, Meta),
+            Bound = maps:get(state_bound, Meta),
+            {NewS, _} = tweann_nif:evaluate_cfc(Sum, State, Tau, Bound),
+            {NewS, NewS}
+    end,
+    [{Output, NewState} | evaluate_neurons_cfc(Ws, Bs, Inputs, Act, Ms, Ss)].
 
 %% @private Dot product of two vectors
 dot_product(Weights, Inputs) ->
@@ -611,6 +746,32 @@ hidden_labels(Size) ->
 %% @param Network The network record
 %% @returns Map suitable for JSON encoding
 -spec to_json(network()) -> map().
+to_json(#network{layers = Layers, activation = Activation, output_activation = OA,
+                 neuron_meta = NeuronMeta, internal_state = InternalState})
+  when NeuronMeta =/= undefined ->
+    %% Version 3: CfC network with neuron metadata and internal state
+    LayerList = [
+        #{<<"weights">> => Weights, <<"biases">> => Biases}
+        || {Weights, Biases} <- Layers
+    ],
+    MetaList = [
+        [#{<<"neuron_type">> => atom_to_binary(maps:get(neuron_type, M), utf8),
+           <<"tau">> => maps:get(tau, M),
+           <<"state_bound">> => maps:get(state_bound, M)}
+         || M <- LayerM]
+        || LayerM <- NeuronMeta
+    ],
+    Base = #{
+        <<"version">> => 3,
+        <<"activation">> => atom_to_binary(Activation, utf8),
+        <<"layers">> => LayerList,
+        <<"neuron_meta">> => MetaList,
+        <<"internal_state">> => InternalState
+    },
+    case OA of
+        undefined -> Base;
+        _ -> Base#{<<"output_activation">> => atom_to_binary(OA, utf8)}
+    end;
 to_json(#network{layers = Layers, activation = Activation, output_activation = OA}) ->
     LayerList = [
         #{<<"weights">> => Weights, <<"biases">> => Biases}
@@ -661,6 +822,37 @@ from_json(#{<<"version">> := 2, <<"activation">> := ActivationBin, <<"layers">> 
         ],
         {ok, #network{layers = Layers, activation = Activation,
                       output_activation = OA}}
+    catch
+        _:Reason ->
+            {error, {invalid_network_format, Reason}}
+    end;
+from_json(#{<<"version">> := 3, <<"activation">> := ActivationBin,
+            <<"layers">> := LayerMaps} = Map) ->
+    try
+        Activation = binary_to_atom(ActivationBin, utf8),
+        OA = case maps:get(<<"output_activation">>, Map, undefined) of
+            undefined -> undefined;
+            OABin -> binary_to_atom(OABin, utf8)
+        end,
+        Layers = [
+            {maps:get(<<"weights">>, L), maps:get(<<"biases">>, L)}
+            || L <- LayerMaps
+        ],
+        NeuronMeta = [
+            [#{neuron_type => binary_to_atom(maps:get(<<"neuron_type">>, M), utf8),
+               tau => float(maps:get(<<"tau">>, M)),
+               state_bound => float(maps:get(<<"state_bound">>, M))}
+             || M <- LayerM]
+            || LayerM <- maps:get(<<"neuron_meta">>, Map, [])
+        ],
+        InternalState = case maps:get(<<"internal_state">>, Map, undefined) of
+            undefined -> undefined;
+            IS -> [[float(V) || V <- Layer] || Layer <- IS]
+        end,
+        {ok, #network{layers = Layers, activation = Activation,
+                      output_activation = OA,
+                      neuron_meta = NeuronMeta,
+                      internal_state = InternalState}}
     catch
         _:Reason ->
             {error, {invalid_network_format, Reason}}
