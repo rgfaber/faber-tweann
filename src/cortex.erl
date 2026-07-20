@@ -245,8 +245,6 @@ handle_sync(State) ->
 
 handle_actuator_output(Output, Fitness, HaltFlag, State) ->
     #state{
-        id = Id,
-        exoself_pid = ExoselfPid,
         cycle_acc = CycleAcc,
         fitness_acc = FitnessAcc,
         halt_flag = HaltAcc,
@@ -270,40 +268,67 @@ handle_actuator_output(Output, Fitness, HaltFlag, State) ->
     %% Check if all actuators have reported
     case ReceivedCount >= ExpectedActuators of
         true ->
-            %% All outputs received - flatten and report
-            Outputs = lists:flatten(lists:reverse(NewCycleAcc)),
-
-            %% Report to exoself if available
-            _ = case ExoselfPid of
-                undefined ->
-                    ok;
-                _ ->
-                    %% Carries fitness and the halt flag. The old form sent
-                    %% outputs alone, which is why exoself had to invent a
-                    %% fitness value.
-                    ExoselfPid ! {cortex, Id, evaluation_complete,
-                                  Outputs, NewFitnessAcc, NewHalt}
-            end,
-
-            %% Check if max cycles reached
-            case MaxCycles of
-                infinity ->
-                    State#state{cycle_acc = [], fitness_acc = NewFitnessAcc, halt_flag = NewHalt};
-                N when CycleCount >= N ->
-                    %% Max cycles reached - terminate
-                    _ = case ExoselfPid of
-                        undefined -> ok;
-                        _ -> ExoselfPid ! {cortex, Id, max_cycles_reached, CycleCount}
-                    end,
-                    State#state{cycle_acc = [], fitness_acc = NewFitnessAcc, halt_flag = NewHalt};
-                _ ->
-                    State#state{cycle_acc = []}
-            end;
+            %% All actuators for this cycle have reported. Whether the
+            %% EVALUATION is finished is the scape's call, via the halt flag.
+            %%
+            %% A scape presents an evaluation as several sense-think-act
+            %% cycles (XOR is four, one per case) and returns halt only on the
+            %% last. Until then the cortex must run another cycle, not report.
+            %% Reporting after a single cycle was why nothing worked: each
+            %% "evaluation" saw only the first case and the scape, reset every
+            %% attempt, never advanced.
+            %%
+            %% This uses the halt flag added with the fitness channel; the
+            %% message protocol is unchanged. It is DXNN2's cortex loop:
+            %% cycle until halt, accumulate fitness, then report once.
+            cortex_cycle_decision(NewHalt, NewCycleAcc, NewFitnessAcc,
+                                  CycleCount, MaxCycles, State);
         false ->
             State#state{cycle_acc = NewCycleAcc,
                         fitness_acc = NewFitnessAcc,
                         halt_flag = NewHalt}
     end.
+
+%% @private Decide whether the evaluation continues or is complete.
+cortex_cycle_decision(0, _CycleAcc, FitnessAcc, CycleCount, MaxCycles, State)
+  when MaxCycles =:= infinity; CycleCount < MaxCycles ->
+    %% Scape says continue: run another sense-think-act cycle. Keep the
+    %% accumulated fitness, discard this cycle's outputs, re-trigger sensors.
+    trigger_sensors(State),
+    State#state{cycle_acc = [],
+                fitness_acc = FitnessAcc,
+                halt_flag = 0,
+                cycle_count = CycleCount + 1};
+cortex_cycle_decision(Halt, CycleAcc, FitnessAcc, CycleCount, _MaxCycles, State) ->
+    %% Evaluation complete: either the scape halted (Halt =/= 0) or the cycle
+    %% cap was reached with no natural halt. Report the accumulated fitness
+    %% once, then reset for the exoself's next evaluation.
+    #state{id = Id, exoself_pid = ExoselfPid} = State,
+    Outputs = lists:flatten(lists:reverse(CycleAcc)),
+    _ = case ExoselfPid of
+            undefined -> ok;
+            _ -> ExoselfPid ! {cortex, Id, evaluation_complete,
+                               Outputs, FitnessAcc, Halt}
+        end,
+    %% If the report was forced by the cycle cap rather than a scape halt,
+    %% signal it so the exoself can distinguish a genuine solution from a
+    %% run that simply ran out of cycles. Halt =:= 0 here means "the scape
+    %% never said stop, we hit the ceiling".
+    _ = case {Halt, ExoselfPid} of
+            {0, P} when is_pid(P) ->
+                P ! {cortex, Id, max_cycles_reached, CycleCount};
+            _ ->
+                ok
+        end,
+    State#state{cycle_acc = [], fitness_acc = 0.0, halt_flag = 0}.
+
+%% @private Trigger all sensors to begin another sense-think-act cycle.
+trigger_sensors(#state{sensor_pids = SensorPids, event_driven = false}) ->
+    [ SensorPid ! {cortex, sync} || SensorPid <- SensorPids ],
+    ok;
+trigger_sensors(#state{id = Id, event_driven = true}) ->
+    network_pubsub:publish(Id, evaluation_cycle_started, #{cortex_pid => self()}),
+    ok.
 
 %% @private
 %% @doc Combine halt flags across actuators. goal_reached wins over a plain

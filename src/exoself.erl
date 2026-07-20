@@ -49,6 +49,11 @@
 
 -record(exoself_state, {
     agent_id :: term(),
+    %% The process to notify with {exoself_terminated, Fitness} when this
+    %% agent finishes. population_monitor's spawn_agent closure blocks on that
+    %% message; before this field was captured, nothing sent it and every
+    %% agent timed out at 5s with fitness [0.0]. See insight 001.
+    caller_pid :: pid() | undefined,
     morphology :: atom(),
     generation :: non_neg_integer(),
     population_monitor_pid :: pid() | undefined,
@@ -99,26 +104,33 @@ prep(AgentId, PopMonitorPid, OpMode) ->
 
 %% @doc Initialize the exoself and spawn the network.
 -spec init(pid() | undefined, term(), pid() | undefined, gt | validation | test) -> no_return().
-init(_CallerPid, AgentId, PopMonitorPid, OpMode) ->
+init(CallerPid, AgentId, PopMonitorPid, OpMode) ->
     %% Read agent from genotype database
-    {agent, Agent} = genotype:dirty_read({agent, AgentId}),
+    Agent = genotype:dirty_read({agent, AgentId}),
 
     %% Create ID to process mapping table
     IdToProcessMap = ets:new(id_to_process_map, [set, private]),
 
     %% Initialize base state
-    State = initialize_base_state(Agent, PopMonitorPid, OpMode, IdToProcessMap),
+    State0 = initialize_base_state(Agent, PopMonitorPid, OpMode, IdToProcessMap),
+
+    %% Spawn scapes before the sensors and actuators that talk to them, as in
+    %% DXNN2. Scape name comes from the sensor/actuator records, deduplicated
+    %% so a sensor and actuator naming the same scape share one process.
+    {ScapePids, ScapeMap} = spawn_scapes(Agent),
+    State = State0#exoself_state{caller_pid = CallerPid,
+                                 private_scape_pids = ScapePids},
 
     %% Spawn network components
-    {SensorPids, SensorIds} = spawn_sensors(State, Agent),
+    {SensorPids, SensorIds} = spawn_sensors(State, Agent, ScapeMap),
     {NeuronPids, NeuronIds} = spawn_neurons(State, Agent),
-    {ActuatorPids, ActuatorIds} = spawn_actuators(State, Agent),
+    {ActuatorPids, ActuatorIds} = spawn_actuators(State, Agent, ScapeMap),
     CortexPid = spawn_cortex(State, Agent, SensorPids, NeuronPids, ActuatorPids),
 
     %% Link network components
     link_sensors(State, Agent),
     link_neurons(State, Agent),
-    link_actuators(State, Agent),
+    link_actuators(State, Agent, CortexPid),
 
     %% Update state with spawned processes
     FinalState = State#exoself_state{
@@ -179,20 +191,58 @@ maybe_report_goal_reached(goal_reached, #exoself_state{population_monitor_pid = 
 maybe_report_goal_reached(_HaltFlag, _State) ->
     ok.
 
--spec spawn_sensors(#exoself_state{}, #agent{}) -> {[pid()], [term()]}.
-spawn_sensors(State, Agent) ->
+%% @private Spawn the private scapes named by the sensors and actuators.
+%%
+%% Reads #sensor.scape and #actuator.scape, keeps the {private, Name} entries,
+%% deduplicates, and spawns one process per distinct scape. Returns the pid
+%% list (for termination) and a map from scape name to pid (for wiring into
+%% sensors and actuators). Public scapes are not spawned here: they are meant
+%% to already be running, independent of any one agent.
+-spec spawn_scapes(#agent{}) -> {[pid()], #{atom() => pid()}}.
+spawn_scapes(Agent) ->
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    SensorScapes = [ (genotype:dirty_read({sensor, Id}))#sensor.scape
+                     || Id <- Cortex#cortex.sensor_ids ],
+    ActuatorScapes = [ (genotype:dirty_read({actuator, Id}))#actuator.scape
+                       || Id <- Cortex#cortex.actuator_ids ],
+    Unique = lists:usort([ S || S <- SensorScapes ++ ActuatorScapes, S =/= undefined ]),
+    lists:foldl(
+        fun({private, Name}, {PidsAcc, MapAcc}) ->
+                Pid = scape:gen(self(), node(), {Name, undefined}),
+                {[Pid | PidsAcc], MapAcc#{Name => Pid}};
+           ({public, _Name}, Acc) ->
+                %% Public scapes are not spawned by the exoself.
+                Acc
+        end,
+        {[], #{}},
+        Unique
+    ).
+
+%% @private Look up a sensor/actuator's scape pid, undefined when none.
+scape_pid_for(undefined, _ScapeMap) ->
+    undefined;
+scape_pid_for({private, Name}, ScapeMap) ->
+    maps:get(Name, ScapeMap, undefined);
+scape_pid_for({public, _Name}, _ScapeMap) ->
+    undefined.
+
+%% @private Spawn all sensor processes, wiring each to its scape.
+-spec spawn_sensors(#exoself_state{}, #agent{}, #{atom() => pid()}) ->
+    {[pid()], [term()]}.
+spawn_sensors(State, Agent, ScapeMap) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
     SensorIds = Cortex#cortex.sensor_ids,
 
     lists:foldl(
         fun(SensorId, {PidsAcc, IdsAcc}) ->
-            {sensor, Sensor} = genotype:dirty_read({sensor, SensorId}),
+            Sensor = genotype:dirty_read({sensor, SensorId}),
             {ok, Pid} = sensor:start_link(#{
                 id => SensorId,
                 sensor_name => Sensor#sensor.name,
                 vector_length => Sensor#sensor.vl,
                 cortex_pid => self(),
+                scape_pid => scape_pid_for(Sensor#sensor.scape, ScapeMap),
                 parameters => Sensor#sensor.parameters
             }),
             ets:insert(IdMap, {SensorId, Pid}),
@@ -206,12 +256,12 @@ spawn_sensors(State, Agent) ->
 -spec spawn_neurons(#exoself_state{}, #agent{}) -> {[pid()], [term()]}.
 spawn_neurons(State, Agent) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
     NeuronIds = Cortex#cortex.neuron_ids,
 
     lists:foldl(
         fun(NeuronId, {PidsAcc, IdsAcc}) ->
-            {neuron, Neuron} = genotype:dirty_read({neuron, NeuronId}),
+            Neuron = genotype:dirty_read({neuron, NeuronId}),
             {ok, Pid} = neuron:start_link(#{
                 id => NeuronId,
                 cortex_pid => self(),
@@ -226,20 +276,22 @@ spawn_neurons(State, Agent) ->
     ).
 
 %% @private Spawn all actuator processes.
--spec spawn_actuators(#exoself_state{}, #agent{}) -> {[pid()], [term()]}.
-spawn_actuators(State, Agent) ->
+-spec spawn_actuators(#exoself_state{}, #agent{}, #{atom() => pid()}) ->
+    {[pid()], [term()]}.
+spawn_actuators(State, Agent, ScapeMap) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
     ActuatorIds = Cortex#cortex.actuator_ids,
 
     lists:foldl(
         fun(ActuatorId, {PidsAcc, IdsAcc}) ->
-            {actuator, Actuator} = genotype:dirty_read({actuator, ActuatorId}),
+            Actuator = genotype:dirty_read({actuator, ActuatorId}),
             {ok, Pid} = actuator:start_link(#{
                 id => ActuatorId,
                 actuator_name => Actuator#actuator.name,
                 vector_length => Actuator#actuator.vl,
                 cortex_pid => self(),
+                scape_pid => scape_pid_for(Actuator#actuator.scape, ScapeMap),
                 parameters => Actuator#actuator.parameters
             }),
             ets:insert(IdMap, {ActuatorId, Pid}),
@@ -265,11 +317,11 @@ spawn_cortex(_State, Agent, SensorPids, NeuronPids, ActuatorPids) ->
 -spec link_sensors(#exoself_state{}, #agent{}) -> ok.
 link_sensors(State, Agent) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
 
     lists:foreach(
         fun(SensorId) ->
-            {sensor, Sensor} = genotype:dirty_read({sensor, SensorId}),
+            Sensor = genotype:dirty_read({sensor, SensorId}),
             [{SensorId, SensorPid}] = ets:lookup(IdMap, SensorId),
             FanoutPids = [
                 begin
@@ -287,11 +339,11 @@ link_sensors(State, Agent) ->
 -spec link_neurons(#exoself_state{}, #agent{}) -> ok.
 link_neurons(State, Agent) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
 
     lists:foreach(
         fun(NeuronId) ->
-            {neuron, Neuron} = genotype:dirty_read({neuron, NeuronId}),
+            Neuron = genotype:dirty_read({neuron, NeuronId}),
             [{NeuronId, NeuronPid}] = ets:lookup(IdMap, NeuronId),
 
             %% Convert input IDs to PIDs
@@ -340,14 +392,14 @@ link_neurons(State, Agent) ->
     ).
 
 %% @private Link actuators to their input neurons.
--spec link_actuators(#exoself_state{}, #agent{}) -> ok.
-link_actuators(State, Agent) ->
+-spec link_actuators(#exoself_state{}, #agent{}, pid()) -> ok.
+link_actuators(State, Agent, CortexPid) ->
     #exoself_state{id_to_process_map = IdMap} = State,
-    {cortex, Cortex} = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
 
     lists:foreach(
         fun(ActuatorId) ->
-            {actuator, Actuator} = genotype:dirty_read({actuator, ActuatorId}),
+            Actuator = genotype:dirty_read({actuator, ActuatorId}),
             [{ActuatorId, ActuatorPid}] = ets:lookup(IdMap, ActuatorId),
             FaninPids = [
                 begin
@@ -356,7 +408,11 @@ link_actuators(State, Agent) ->
                 end
                 || Id <- Actuator#actuator.fanin_ids
             ],
-            ActuatorPid ! {link, fanin_pids, FaninPids}
+            ActuatorPid ! {link, fanin_pids, FaninPids},
+            %% Re-point the actuator at the real cortex. It was spawned with
+            %% the exoself as a placeholder cortex_pid, because the cortex did
+            %% not exist yet.
+            ActuatorPid ! {link, cortex_pid, CortexPid}
         end,
         Cortex#cortex.actuator_ids
     ).
@@ -468,14 +524,45 @@ handle_evaluation_complete(Fitness, HaltFlag, State) ->
     %% Check if more attempts
     case CurrentAttempt < MaxAttempts of
         true ->
+            reset_scapes(NewState),
             perturb_weights(NewState),
             cortex:sync(CortexPid),
             loop(NewState#exoself_state{current_attempt = CurrentAttempt + 1});
         false ->
-            %% Tuning complete
-            NewState2 = NewState#exoself_state{current_attempt = 1},
-            loop(NewState2)
+            %% Tuning complete for this agent.
+            %%
+            %% This branch previously reset the attempt counter and looped
+            %% FOREVER, sending nothing to the caller. That is why every agent
+            %% timed out at 5s with fitness [0.0] and no evolutionary run ever
+            %% completed (insight 001). It now finishes the agent: tear down
+            %% the phenotype and report the best fitness found to the process
+            %% that spawned it.
+            finish(NewState)
     end.
+
+%% @private Report the agent's result and terminate its phenotype.
+finish(State) ->
+    #exoself_state{caller_pid = CallerPid,
+                   highest_fitness = HighestFitness} = State,
+    Fitness = case HighestFitness of
+                  undefined -> 0.0;
+                  F -> F
+              end,
+    terminate_network(State),
+    _ = case CallerPid of
+            undefined -> ok;
+            _ -> CallerPid ! {exoself_terminated, Fitness}
+        end,
+    ok.
+
+%% @private Reset every scape to fresh state before the next evaluation.
+%%
+%% A stateful scape (XOR walks through four cases) must start each evaluation
+%% clean. xor_sim happens to self-reset on its final case, but relying on that
+%% would break the moment an evaluation is cut short, so reset explicitly.
+reset_scapes(#exoself_state{private_scape_pids = Pids}) ->
+    [ Pid ! {self(), reset} || Pid <- Pids ],
+    ok.
 
 %% @private Perturb weights using simulated annealing.
 -spec perturb_weights(#exoself_state{}) -> ok.
@@ -527,8 +614,13 @@ restore_weights(State) ->
 terminate_network(State) ->
     #exoself_state{
         cortex_pid = CortexPid,
+        private_scape_pids = ScapePids,
         id_to_process_map = IdMap
     } = State,
+
+    %% Terminate scapes first, before the cortex, matching DXNN2's teardown
+    %% order. A scape outliving its network would leak a process per agent.
+    [ Pid ! {self(), terminate} || Pid <- ScapePids ],
 
     %% Terminate cortex (which will terminate sensors, neurons, actuators)
     case CortexPid of

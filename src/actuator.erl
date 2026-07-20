@@ -124,6 +124,16 @@ loop(State) ->
             },
             loop(NewState);
 
+        %% Re-point at the real cortex.
+        %%
+        %% The actuator is spawned before the cortex exists (components first,
+        %% cortex last), so its cortex_pid is initialised to the exoself as a
+        %% placeholder. Without this link, actuator_output was sent to the
+        %% exoself, which drops it, and the cortex waited forever. This is why
+        %% no evaluation ever completed through this path.
+        {link, cortex_pid, CortexPid} ->
+            loop(State#state{cortex_pid = CortexPid});
+
         %% Catch-all: log and discard unexpected messages to prevent mailbox bloat
         UnexpectedMsg ->
             tweann_logger:warning("Actuator ~p received unexpected message: ~p",

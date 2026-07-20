@@ -106,7 +106,7 @@ single_actuator_output_test() ->
     {ok, CortexPid2} = cortex:start_link(Opts),
 
     %% Send actuator output
-    CortexPid2 ! {actuator_output, self(), [1.0, 2.0]},
+    CortexPid2 ! {actuator_output, self(), [1.0, 2.0], 0.0, 1},
 
     receive
         {cortex, test_cortex, evaluation_complete, Outputs, _Fitness, _Halt} ->
@@ -130,7 +130,7 @@ multiple_actuator_outputs_test() ->
     {ok, CortexPid} = cortex:start_link(Opts),
 
     %% First actuator reports - should not complete yet
-    CortexPid ! {actuator_output, Act1, [1.0]},
+    CortexPid ! {actuator_output, Act1, [1.0], 0.0, 0},
 
     receive
         {cortex, test_cortex, evaluation_complete, _, _, _} ->
@@ -140,7 +140,7 @@ multiple_actuator_outputs_test() ->
     end,
 
     %% Second actuator reports - now should complete
-    CortexPid ! {actuator_output, Act2, [2.0]},
+    CortexPid ! {actuator_output, Act2, [2.0], 0.0, 1},
 
     receive
         {cortex, test_cortex, evaluation_complete, Outputs, _Fitness, _Halt} ->
@@ -217,7 +217,9 @@ sensor_loop(OutputPid, Signal) ->
 actuator_loop(CortexPid) ->
     receive
         {forward, _From, Signal} ->
-            CortexPid ! {actuator_output, self(), Signal},
+            %% halt=1: this mock scape completes the evaluation each cycle, so
+            %% the cortex reports rather than looping for another case.
+            CortexPid ! {actuator_output, self(), Signal, 0.0, 1},
             actuator_loop(CortexPid);
         {cortex, terminate} ->
             ok
@@ -268,31 +270,51 @@ multiple_cycles_test() ->
 %% Max Cycles Tests
 %% =============================================================================
 
+%% Under the loop-until-halt contract, a scape that never halts (always sends
+%% halt=0) makes the cortex cycle internally. max_cycles is the safety cap:
+%% when it is reached without a natural halt, the cortex reports once and
+%% signals max_cycles_reached. This drives that with a non-halting mock
+%% actuator and a sensor that re-fires each internal cycle.
 max_cycles_reached_test() ->
-    Act = spawn(fun() -> receive _ -> ok end end),
+    Actuator = spawn(fun() ->
+        receive {set_cortex, CortexPid} -> non_halting_actuator_loop(CortexPid) end
+    end),
+    Sensor = spawn(fun() ->
+        receive {set_cortex, _CortexPid} -> sensor_loop(Actuator, [1.0]) end
+    end),
 
     Opts = (simple_cortex_opts())#{
-        actuator_pids => [Act],
+        sensor_pids => [Sensor],
+        actuator_pids => [Actuator],
         max_cycles => 2
     },
-
     {ok, CortexPid} = cortex:start_link(Opts),
+    Actuator ! {set_cortex, CortexPid},
+    Sensor ! {set_cortex, CortexPid},
+    timer:sleep(10),
 
-    %% First cycle
     cortex:sync(CortexPid),
-    CortexPid ! {actuator_output, Act, [1.0]},
-    receive {cortex, test_cortex, evaluation_complete, _, _, _} -> ok after 1000 -> ?assert(false) end,
 
-    %% Second cycle - should trigger max_cycles_reached
-    cortex:sync(CortexPid),
-    CortexPid ! {actuator_output, Act, [2.0]},
-
-    %% Should receive both completion and max_cycles_reached
-    receive {cortex, test_cortex, evaluation_complete, _, _, _} -> ok after 1000 -> ?assert(false) end,
-    receive {cortex, test_cortex, max_cycles_reached, 2} -> ok after 1000 -> ?assert(false) end,
+    %% The scape never halts, so the cortex loops until the cap and then both
+    %% reports and signals the cap.
+    receive {cortex, test_cortex, evaluation_complete, _, _, _} -> ok
+    after 1000 -> ?assert(false) end,
+    receive {cortex, test_cortex, max_cycles_reached, _} -> ok
+    after 1000 -> ?assert(false) end,
 
     cortex:terminate(CortexPid),
-    Act ! done.
+    Sensor ! {cortex, terminate},
+    Actuator ! {cortex, terminate}.
+
+%% A mock actuator that never ends the evaluation (halt=0 every cycle).
+non_halting_actuator_loop(CortexPid) ->
+    receive
+        {forward, _From, Signal} ->
+            CortexPid ! {actuator_output, self(), Signal, 0.0, 0},
+            non_halting_actuator_loop(CortexPid);
+        {cortex, terminate} ->
+            ok
+    end.
 
 %% =============================================================================
 %% Backup Tests
