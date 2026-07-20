@@ -327,7 +327,9 @@ handle_cleanup(State) ->
 
 %% @private Handle input timeout
 handle_input_timeout(State) ->
-    MissingInputs = State#state.expected_inputs - maps:size(State#state.acc_input),
+    AccInput = State#state.acc_input,
+    MissingInputs = length([Pid || Pid <- State#state.input_pids,
+                                   maps:get(Pid, AccInput, []) =:= []]),
     NewTimeoutCount = State#state.timeout_count + 1,
     tweann_logger:warning("Neuron ~p input timeout after ~pms, missing ~p inputs (timeout ~p/~p)",
                          [State#state.id, State#state.input_timeout, MissingInputs,
@@ -347,20 +349,49 @@ handle_input_timeout(State) ->
 handle_forward(FromPid, Signal, State) ->
     #state{
         acc_input = AccInput,
-        expected_inputs = ExpectedInputs
+        input_pids = InputPids
     } = State,
 
-    %% Accumulate the signal and reset timeout count (input received)
-    NewAccInput = maps:put(FromPid, Signal, AccInput),
-    ReceivedCount = maps:size(NewAccInput),
+    %% Accumulate the signal as a FIFO queue per source, NOT an overwrite.
+    %%
+    %% The cortex advances to the next sense-think-act cycle when the ACTUATORS
+    %% report, which in a recurrent network can happen before every neuron has
+    %% fired. If a neuron then receives the next cycle's signal from a source it
+    %% has not yet consumed, an overwrite would drop the earlier cycle's input,
+    %% so the neuron fires once for two cycles and its recurrent target starves
+    %% (a 10s input_timeout stall, EXP_017/020). Queueing instead makes the
+    %% neuron fire exactly once per cycle, consuming one signal per source, with
+    %% any extra buffered for the next cycle. Feedforward (one signal per source
+    %% per cycle) is unaffected: the queue length is always one.
+    Queue = maps:get(FromPid, AccInput, []),
+    NewAccInput = maps:put(FromPid, Queue ++ [Signal], AccInput),
 
-    %% Check if we have all inputs
-    case ReceivedCount >= ExpectedInputs of
+    %% Ready to fire once every expected input has at least one queued signal.
+    case is_ready(InputPids, NewAccInput) of
         true ->
             process_and_forward(State#state{acc_input = NewAccInput, timeout_count = 0});
         false ->
             State#state{acc_input = NewAccInput, timeout_count = 0}
     end.
+
+%% @private Every expected input has at least one queued signal.
+is_ready(InputPids, AccInput) ->
+    lists:all(fun(Pid) -> maps:get(Pid, AccInput, []) =/= [] end, InputPids).
+
+%% @private Take one signal (the head) from each expected input's queue for this
+%% cycle, returning {HeadsMap, RemainingQueues}. HeadsMap has the old
+%% #{Pid => Signal} shape the aggregation helpers expect; RemainingQueues keeps
+%% any buffered later-cycle signals.
+split_heads(InputPids, AccInput) ->
+    lists:foldl(
+        fun(Pid, {Heads, Rem}) ->
+            case maps:get(Pid, AccInput, []) of
+                [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
+                [] -> {Heads, Rem}
+            end
+        end,
+        {#{}, #{}},
+        InputPids).
 
 process_and_forward(State) ->
     #state{
@@ -375,15 +406,18 @@ process_and_forward(State) ->
         compiled_weights = CompiledWeights
     } = State,
 
+    %% Consume one signal per source for THIS cycle; buffer any extras.
+    {CurrentSignals, RemainingAcc} = split_heads(InputPids, AccInput),
+
     %% Aggregate inputs (use compiled weights if available for NIF acceleration)
     Aggregated = case {AggregationFn, CompiledWeights} of
         {dot_product, {FlatWeights, CompiledBias}} when is_list(FlatWeights) ->
             %% Fast path: use pre-compiled flat weights with NIF
-            FlatSignals = flatten_signals(InputPids, AccInput),
+            FlatSignals = flatten_signals(InputPids, CurrentSignals),
             aggregate_compiled(FlatSignals, FlatWeights, CompiledBias);
         _ ->
             %% Fallback: build inputs/weights and use standard aggregation
-            Inputs = build_inputs(InputPids, AccInput),
+            Inputs = build_inputs(InputPids, CurrentSignals),
             Weights = build_weights(InputPids, InputWeights),
             aggregate(AggregationFn, Inputs, Weights) + Bias
     end,
@@ -407,8 +441,8 @@ process_and_forward(State) ->
         RoPids
     ),
 
-    %% Reset accumulated inputs
-    State#state{acc_input = #{}}.
+    %% Keep any signals buffered for later cycles; this cycle's heads are spent.
+    State#state{acc_input = RemainingAcc}.
 
 build_inputs(InputPids, AccInput) ->
     [{Pid, maps:get(Pid, AccInput, [0.0])} || Pid <- InputPids].

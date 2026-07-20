@@ -297,7 +297,9 @@ flush_forwards() ->
 
 %% @private Handle input timeout
 handle_input_timeout(State) ->
-    MissingInputs = State#state.expected_inputs - maps:size(State#state.acc_input),
+    AccInput = State#state.acc_input,
+    MissingInputs = length([Pid || Pid <- State#state.input_pids,
+                                   maps:get(Pid, AccInput, []) =:= []]),
     tweann_logger:warning("LTC Neuron ~p input timeout after ~pms, missing ~p inputs",
                          [State#state.id, State#state.input_timeout, MissingInputs]),
     %% Continue waiting - neuron stays alive but logs the issue
@@ -306,20 +308,35 @@ handle_input_timeout(State) ->
 handle_forward(FromPid, Signal, State) ->
     #state{
         acc_input = AccInput,
-        expected_inputs = ExpectedInputs
+        input_pids = InputPids
     } = State,
 
-    %% Accumulate the signal
-    NewAccInput = maps:put(FromPid, Signal, AccInput),
-    ReceivedCount = maps:size(NewAccInput),
+    %% FIFO-queue accumulation per source (see neuron.erl): the neuron fires
+    %% exactly once per cortex cycle even when the cortex over-triggers a
+    %% recurrent network, so a recurrent target never starves.
+    Queue = maps:get(FromPid, AccInput, []),
+    NewAccInput = maps:put(FromPid, Queue ++ [Signal], AccInput),
 
-    %% Check if we have all inputs
-    case ReceivedCount >= ExpectedInputs of
+    case is_ready(InputPids, NewAccInput) of
         true ->
             process_and_forward(State#state{acc_input = NewAccInput});
         false ->
             State#state{acc_input = NewAccInput}
     end.
+
+is_ready(InputPids, AccInput) ->
+    lists:all(fun(Pid) -> maps:get(Pid, AccInput, []) =/= [] end, InputPids).
+
+split_heads(InputPids, AccInput) ->
+    lists:foldl(
+        fun(Pid, {Heads, Rem}) ->
+            case maps:get(Pid, AccInput, []) of
+                [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
+                [] -> {Heads, Rem}
+            end
+        end,
+        {#{}, #{}},
+        InputPids).
 
 process_and_forward(State) ->
     #state{
@@ -338,8 +355,11 @@ process_and_forward(State) ->
         input_pids = InputPids
     } = State,
 
+    %% Consume one signal per source for this cycle; buffer any extras.
+    {CurrentSignals, RemainingAcc} = split_heads(InputPids, AccInput),
+
     %% Build input list and aggregate weighted signals
-    Inputs = build_inputs(InputPids, AccInput),
+    Inputs = build_inputs(InputPids, CurrentSignals),
     Weights = build_weights(InputPids, InputWeights),
 
     %% Compute weighted input sum (standard aggregation)
@@ -375,7 +395,7 @@ process_and_forward(State) ->
 
     %% Reset accumulated inputs but preserve internal state
     State#state{
-        acc_input = #{},
+        acc_input = RemainingAcc,
         internal_state = NewInternalState
     }.
 
