@@ -58,7 +58,7 @@ run_one_agent() ->
 
     {ok, _Pid} = exoself:start(AgentId, undefined, test),
     receive
-        {exoself_terminated, Fitness} ->
+        {exoself_terminated, Fitness, _EvalCount} ->
             {ok, Fitness}
     after 20000 ->
         {error, timeout}

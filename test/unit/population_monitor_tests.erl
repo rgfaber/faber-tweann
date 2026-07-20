@@ -194,5 +194,6 @@ create_test_state(Overrides) ->
      %% tuple must track the record field order.
      maps:get(solved, Merged, false),
      maps:get(notify_pid, Merged, undefined),
+     maps:get(total_evaluations, Merged, 0),
      maps:get(fitness_acc, Merged)
     }.

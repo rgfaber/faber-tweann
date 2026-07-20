@@ -566,7 +566,8 @@ handle_evaluation_complete(Fitness, HaltFlag, State) ->
 %% @private Report the agent's result and terminate its phenotype.
 finish(State) ->
     #exoself_state{caller_pid = CallerPid,
-                   highest_fitness = HighestFitness} = State,
+                   highest_fitness = HighestFitness,
+                   evaluation_count = EvalCount} = State,
     Fitness = case HighestFitness of
                   undefined -> 0.0;
                   F -> F
@@ -574,7 +575,11 @@ finish(State) ->
     terminate_network(State),
     _ = case CallerPid of
             undefined -> ok;
-            _ -> CallerPid ! {exoself_terminated, Fitness}
+            %% Report the fitness AND how many scape evaluations this agent
+            %% cost, so the population can total them. The memetic tuner runs
+            %% many evaluations per agent, and an honest evaluations-to-solve
+            %% figure (Sher's Table 14.1 metric) must count every one.
+            _ -> CallerPid ! {exoself_terminated, Fitness, EvalCount}
         end,
     ok.
 

@@ -40,6 +40,7 @@
     start_link/1,
     start_evaluation/1,
     agent_terminated/3,
+    agent_terminated/4,
     stop/1
 ]).
 
@@ -85,6 +86,10 @@
     %% Optional process notified with {population_complete, Info} when the run
     %% ends, so a caller can observe reason and result without racing the stop.
     notify_pid :: pid() | undefined,
+    %% Total scape evaluations across all agents and all their memetic tuning
+    %% attempts. This is the honest evaluations-to-solve metric (Sher's
+    %% Table 14.1), which must count every fitness evaluation, not generations.
+    total_evaluations = 0 :: non_neg_integer(),
     fitness_acc = [] :: [{term(), [float()]}]
 }).
 
@@ -107,7 +112,13 @@ start_evaluation(Pid) ->
 %% @doc Report that an agent has completed evaluation.
 -spec agent_terminated(pid(), term(), [float()]) -> ok.
 agent_terminated(Pid, AgentId, Fitness) ->
-    gen_server:cast(Pid, {agent_terminated, AgentId, Fitness}).
+    agent_terminated(Pid, AgentId, Fitness, 1).
+
+%% @doc As agent_terminated/3, plus the number of scape evaluations this agent
+%% cost (its memetic tuning attempts). Used for the honest total.
+-spec agent_terminated(pid(), term(), [float()], non_neg_integer()) -> ok.
+agent_terminated(Pid, AgentId, Fitness, EvalCount) ->
+    gen_server:cast(Pid, {agent_terminated, AgentId, Fitness, EvalCount}).
 
 %% @doc Stop the population monitor.
 -spec stop(pid()) -> ok.
@@ -159,8 +170,10 @@ handle_call(_Request, _From, State) ->
     {noreply, population_state()} | {stop, normal, population_state()}.
 handle_cast(start_evaluation, State) ->
     handle_start_evaluation(State);
+handle_cast({agent_terminated, AgentId, Fitness, EvalCount}, State) ->
+    handle_agent_termination(AgentId, Fitness, EvalCount, State);
 handle_cast({agent_terminated, AgentId, Fitness}, State) ->
-    handle_agent_termination(AgentId, Fitness, State);
+    handle_agent_termination(AgentId, Fitness, 1, State);
 handle_cast(next_generation, State) ->
     handle_generation_advance(State);
 handle_cast(_Msg, State) ->
@@ -215,9 +228,9 @@ handle_start_evaluation(State) ->
     end.
 
 %% @private Handle agent completing evaluation
--spec handle_agent_termination(term(), [float()], population_state()) ->
+-spec handle_agent_termination(term(), [float()], non_neg_integer(), population_state()) ->
     {noreply, population_state()}.
-handle_agent_termination(AgentId, Fitness, State) ->
+handle_agent_termination(AgentId, Fitness, EvalCount, State) ->
     %% Remove from active processes
     UpdatedActive = lists:keydelete(AgentId, 1, State#population_state.active_agent_processes),
 
@@ -227,6 +240,7 @@ handle_agent_termination(AgentId, Fitness, State) ->
     UpdatedState = State#population_state{
         active_agent_processes = UpdatedActive,
         remaining_agents = State#population_state.remaining_agents - 1,
+        total_evaluations = State#population_state.total_evaluations + EvalCount,
         fitness_acc = UpdatedFitnessAcc
     },
 
@@ -338,9 +352,9 @@ spawn_agent(AgentId, State) ->
         %% attempts per evaluation), so a single agent can take a while; 5s was
         %% too tight and produced spurious [0.0]. 30s is comfortable.
         receive
-            {exoself_terminated, Fitness} ->
+            {exoself_terminated, Fitness, EvalCount} ->
                 population_monitor:agent_terminated(MonitorPid, AgentId,
-                                                    ensure_fitness_list(Fitness));
+                                                    ensure_fitness_list(Fitness), EvalCount);
             {'EXIT', ExoselfPid, normal} ->
                 %% Terminated cleanly without reporting (should not happen);
                 %% treat as no fitness.
@@ -468,7 +482,8 @@ notify_complete(State, Reason) ->
             Pid ! {population_complete, #{
                 reason => Reason,
                 generation => State#population_state.generation_count,
-                best_fitness => State#population_state.current_best_fitness
+                best_fitness => State#population_state.current_best_fitness,
+                total_evaluations => State#population_state.total_evaluations
             }},
             ok
     end.
