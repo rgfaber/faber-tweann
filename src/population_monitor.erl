@@ -326,22 +326,28 @@ spawn_agent(AgentId, State) ->
     OpMode = State#population_state.operation_mode,
 
     spawn_link(fun() ->
-        %% Start exoself for this agent
-        {ok, _ExoselfPid} = exoself:start(
-            AgentId,
-            MonitorPid,
-            OpMode
-        ),
+        %% Trap exits so a crashing agent does not cascade to the population
+        %% monitor. A malformed genotype (for example a mutation that still
+        %% produces an unevaluable topology) must cost that individual its
+        %% fitness, not the whole run. Selection then removes it.
+        process_flag(trap_exit, true),
 
-        %% Wait for the agent to complete.
-        %%
+        {ok, ExoselfPid} = exoself:start(AgentId, MonitorPid, OpMode),
+
         %% The scape drives a memetic tuning loop (up to 15 weight-perturbation
         %% attempts per evaluation), so a single agent can take a while; 5s was
-        %% too tight and produced spurious [0.0] fitnesses. 30s is comfortable.
+        %% too tight and produced spurious [0.0]. 30s is comfortable.
         receive
             {exoself_terminated, Fitness} ->
                 population_monitor:agent_terminated(MonitorPid, AgentId,
-                                                    ensure_fitness_list(Fitness))
+                                                    ensure_fitness_list(Fitness));
+            {'EXIT', ExoselfPid, normal} ->
+                %% Terminated cleanly without reporting (should not happen);
+                %% treat as no fitness.
+                population_monitor:agent_terminated(MonitorPid, AgentId, [0.0]);
+            {'EXIT', ExoselfPid, Reason} ->
+                tweann_logger:warning("Agent ~p died: ~p", [AgentId, Reason]),
+                population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
         after 30000 ->
             tweann_logger:warning("Agent ~p evaluation timeout after 30s", [AgentId]),
             population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])

@@ -95,7 +95,11 @@ add_outlink_from_neuron(NeuronId, Cortex) ->
     Neuron = genotype:dirty_read({neuron, NeuronId}),
     AllTargets = Cortex#cortex.neuron_ids ++ Cortex#cortex.actuator_ids,
     CurrentOutputs = Neuron#neuron.output_ids,
-    AvailableTargets = AllTargets -- CurrentOutputs -- [NeuronId],
+    AvailableTargets0 = AllTargets -- CurrentOutputs -- [NeuronId],
+    %% In feedforward mode, only connect to a strictly higher layer, so the
+    %% network stays acyclic and the single-pass evaluator never waits on a
+    %% feedback signal. See layer_of/1.
+    AvailableTargets = forward_only(NeuronId, AvailableTargets0, Neuron),
     connect_to_target(NeuronId, Neuron, AvailableTargets).
 
 connect_to_target(_NeuronId, _Neuron, []) ->
@@ -127,8 +131,46 @@ add_inlink_to_neuron(NeuronId, Cortex) ->
     Neuron = genotype:dirty_read({neuron, NeuronId}),
     AllSources = Cortex#cortex.sensor_ids ++ Cortex#cortex.neuron_ids,
     CurrentInputIds = [InputId || {InputId, _} <- Neuron#neuron.input_idps],
-    AvailableSources = AllSources -- CurrentInputIds -- [NeuronId],
+    AvailableSources0 = AllSources -- CurrentInputIds -- [NeuronId],
+    %% Feedforward: only accept input from a strictly lower layer.
+    AvailableSources = backward_only(NeuronId, AvailableSources0, Neuron),
     connect_from_source(NeuronId, Neuron, AvailableSources).
+
+%% @private Keep only targets at a strictly higher layer than the source
+%% neuron, so an added output link runs forward.
+forward_only(NeuronId, Targets, Neuron) ->
+    case is_feedforward(Neuron) of
+        false -> Targets;
+        true ->
+            L = layer_of(NeuronId),
+            [T || T <- Targets, layer_of(T) > L]
+    end.
+
+%% @private Keep only sources at a strictly lower layer than the target
+%% neuron, so an added input link runs forward.
+backward_only(NeuronId, Sources, Neuron) ->
+    case is_feedforward(Neuron) of
+        false -> Sources;
+        true ->
+            L = layer_of(NeuronId),
+            [S || S <- Sources, layer_of(S) < L]
+    end.
+
+%% @private A neuron belongs to a feedforward agent when its cortex's agent
+%% declares connection_architecture = feedforward. Defaults to feedforward
+%% when unknown, which is the safe direction: it never introduces a cycle the
+%% evaluator cannot handle.
+is_feedforward(Neuron) ->
+    case genotype:dirty_read({cortex, Neuron#neuron.cx_id}) of
+        undefined -> true;
+        Cortex ->
+            case genotype:dirty_read({agent, Cortex#cortex.agent_id}) of
+                undefined -> true;
+                Agent ->
+                    (Agent#agent.constraint)#constraint.connection_architecture
+                        =/= recurrent
+            end
+    end.
 
 connect_from_source(_NeuronId, _Neuron, []) ->
     {error, no_available_sources};
@@ -155,8 +197,22 @@ add_neuron(AgentId) ->
             insert_neuron(Agent, Cortex, FromId, ToId, Weight)
     end.
 
+%% @private The layer coordinate of any element id.
+%%
+%% Ids are {{Layer, Unique}, Type}. Sensors sit at -1, actuators at +1,
+%% neurons between. A spliced neuron takes a fractional layer strictly between
+%% its endpoints, which is what keeps a feedforward network acyclic: every
+%% connection then runs from a lower layer to a higher one. genotype's
+%% generate_id(neuron) hardcodes layer 0, so every neuron used to land on the
+%% same layer, turning same-layer connections into self/feedback loops that the
+%% single-pass evaluator waits on forever (roadmap 2b, insight 010).
+layer_of({{Layer, _Unique}, _Type}) when is_number(Layer) ->
+    Layer.
+
 insert_neuron(Agent, Cortex, FromId, ToId, Weight) ->
-    NewNeuronId = genotype:generate_id(neuron),
+    %% Place the new neuron between its endpoints so feedforward order holds.
+    NewLayer = (layer_of(FromId) + layer_of(ToId)) / 2,
+    NewNeuronId = {{NewLayer, genotype:generate_UniqueId()}, neuron},
     Constraint = Agent#agent.constraint,
     AF = selection_utils:random_select(Constraint#constraint.neural_afs),
     AggrF = selection_utils:random_select(Constraint#constraint.neural_aggr_fs),

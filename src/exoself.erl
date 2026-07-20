@@ -301,6 +301,19 @@ spawn_actuators(State, Agent, ScapeMap) ->
         ActuatorIds
     ).
 
+%% @private Split a `bias' entry out of a neuron's input_idps.
+%%
+%% add_bias records bias as {bias, [Weight]} among the inputs. It is a constant
+%% contribution, not a signal from another process, so it must not be resolved
+%% to a pid. Returns {BiasWeight, RealInputIdps}, defaulting to 0.0 when the
+%% neuron has no bias.
+extract_bias(InputIdps) ->
+    case lists:keytake(bias, 1, InputIdps) of
+        {value, {bias, [W]}, Rest} -> {W, Rest};
+        {value, {bias, W}, Rest} when is_number(W) -> {W, Rest};
+        false -> {0.0, InputIdps}
+    end.
+
 %% @private Spawn cortex process.
 -spec spawn_cortex(#exoself_state{}, #agent{}, [pid()], [pid()], [pid()]) -> pid().
 spawn_cortex(_State, Agent, SensorPids, NeuronPids, ActuatorPids) ->
@@ -346,13 +359,18 @@ link_neurons(State, Agent) ->
             Neuron = genotype:dirty_read({neuron, NeuronId}),
             [{NeuronId, NeuronPid}] = ets:lookup(IdMap, NeuronId),
 
+            %% `bias' is a constant input, not a process. Separate it from the
+            %% real inputs so it is not looked up as a pid (which would
+            %% badmatch []), and route its weight to the neuron's bias field.
+            {BiasWeight, RealInputIdps} = extract_bias(Neuron#neuron.input_idps),
+
             %% Convert input IDs to PIDs
             InputPids = [
                 begin
                     [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
                     InputPid
                 end
-                || {InputId, _Weights} <- Neuron#neuron.input_idps
+                || {InputId, _Weights} <- RealInputIdps
             ],
 
             %% Build input weights map (PID -> weights)
@@ -361,7 +379,7 @@ link_neurons(State, Agent) ->
                     [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
                     {InputPid, Weights}
                 end
-                || {InputId, Weights} <- Neuron#neuron.input_idps
+                || {InputId, Weights} <- RealInputIdps
             ]),
 
             %% Convert output IDs to PIDs
@@ -386,7 +404,8 @@ link_neurons(State, Agent) ->
             NeuronPid ! {link, input_pids, InputPids},
             NeuronPid ! {link, output_pids, OutputPids},
             NeuronPid ! {link, ro_pids, ROPids},
-            NeuronPid ! {link, input_weights, InputWeights}
+            NeuronPid ! {link, input_weights, InputWeights},
+            NeuronPid ! {link, bias, BiasWeight}
         end,
         Cortex#cortex.neuron_ids
     ).

@@ -46,6 +46,10 @@
     ro_pids :: [pid()],  % recurrent output PIDs
     input_weights :: #{pid() => [{float(), float(), float(), list()}]},
     bias :: float(),
+    %% Local snapshot for the exoself's memetic weight tuning: backup saves the
+    %% current weights, perturb jitters them, restore reverts on a worse result.
+    saved_weights = undefined :: #{pid() => [tuple()]} | undefined,
+    saved_bias = undefined :: float() | undefined,
     acc_input :: #{pid() => [float()]},
     expected_inputs :: non_neg_integer(),
     input_timeout :: pos_integer(),
@@ -155,8 +159,42 @@ loop(State) ->
 
         %% Legacy: direct backup request
         backup ->
+            %% Snapshot current weights locally so a later restore can revert a
+            %% bad perturbation, and report them to the cortex for genotype
+            %% persistence.
             _ = handle_backup(State),
-            loop(State);
+            loop(State#state{saved_weights = State#state.input_weights,
+                             saved_bias = State#state.bias});
+
+        %% Memetic tuning: jitter this neuron's input weights and bias by a
+        %% range the exoself anneals down over attempts. Recompile the NIF
+        %% weight cache so the perturbation actually takes effect.
+        {perturb, Range} ->
+            PerturbedWeights = maps:map(
+                fun(_Pid, WSpecs) -> perturbation_utils:perturb_weights(WSpecs, Range) end,
+                State#state.input_weights),
+            PerturbedBias = perturbation_utils:sat(
+                State#state.bias + (rand:uniform() - 0.5) * Range, 3.1415926),
+            Compiled = compile_weights_for_nif(
+                State#state.aggregation_function, State#state.input_pids,
+                PerturbedWeights, PerturbedBias),
+            loop(State#state{input_weights = PerturbedWeights,
+                             bias = PerturbedBias,
+                             compiled_weights = Compiled});
+
+        %% Revert to the last backed-up weights (the perturbation was worse).
+        restore ->
+            case State#state.saved_weights of
+                undefined ->
+                    loop(State);
+                Saved ->
+                    Bias = State#state.saved_bias,
+                    Compiled = compile_weights_for_nif(
+                        State#state.aggregation_function, State#state.input_pids,
+                        Saved, Bias),
+                    loop(State#state{input_weights = Saved, bias = Bias,
+                                     compiled_weights = Compiled})
+            end;
 
         %% Event-driven: backup requested via pubsub
         {network_event, backup_requested, _Data} ->
@@ -201,6 +239,13 @@ loop(State) ->
 
         {link, ro_pids, RoPids} ->
             loop(State#state{ro_pids = RoPids});
+
+        %% Bias is a constant input, not a process. The add_bias mutation
+        %% records it as a {bias, Weight} entry in the genotype's input_idps;
+        %% link_neurons extracts the weight and sends it here rather than
+        %% trying to resolve `bias' as a pid.
+        {link, bias, BiasWeight} ->
+            loop(State#state{bias = BiasWeight});
 
         {link, input_weights, InputWeights} ->
             %% Recompile weights for NIF when linking new weights
