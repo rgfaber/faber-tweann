@@ -38,25 +38,34 @@ Then fetch dependencies:
 mix deps.get
 ```
 
-## Enterprise Edition (10-15x Faster)
+## Native Acceleration
 
-The Enterprise Edition includes high-performance Rust NIFs for compute-intensive operations. Add the private `faber_nn_nifs` package alongside faber-tweann:
+The Rust NIFs ship with faber_tweann and are built from source at compile
+time. No extra dependency is needed.
 
-```erlang
-{deps, [
-    {faber_tweann, "~> 0.17.0"},
-    {faber_nn_nifs, {git, "git@github.com:rgfaber/faber-nn-nifs.git", {tag, "v0.2.0"}}}
-]}.
+Before v2.0.0 they lived in a separate `faber-nn-nifs` package. That package
+has been absorbed; remove it from your deps if present.
+
+A Rust toolchain is required:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### Enterprise Requirements
+To build without it:
 
-- Rust 1.70+ and Cargo installed
-- SSH access to the private faber-nn-nifs repository
+```bash
+FABER_TWEANN_SKIP_NIF=1 rebar3 compile
+```
 
-The NIFs are automatically detected and used. No code changes required.
+and then select the pure Erlang implementation explicitly, since faber_tweann
+will otherwise raise rather than fall back silently:
 
-See the [Enterprise NIF Acceleration](enterprise-nifs.md) guide for details.
+```erlang
+[{faber_tweann, [{nif_impl, fallback}]}].
+```
+
+See the [Native Acceleration](native-nifs.md) guide.
 
 ## From Source
 
@@ -72,7 +81,7 @@ rebar3 compile
 
 - Erlang/OTP 24 or later
 - Mnesia (included with Erlang)
-- Rust 1.70+ (Enterprise Edition only)
+- Rust 1.70+ and Cargo (for the native NIFs; see above to build without)
 
 ## Verify Installation
 
@@ -88,12 +97,12 @@ genotype:init_db().
 
 If you see `ok`, the installation is successful!
 
-### Verify NIF Acceleration (Enterprise)
+### Verify Native Acceleration
 
 ```erlang
-% Check if enterprise NIFs are loaded
+% Check which implementation is active
 faber_nn_nifs:is_loaded().
-% => true (Enterprise) or error (Community)
+% => true when the native path is active
 
 % Check tweann_nif detection
 tweann_nif:is_loaded().

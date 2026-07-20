@@ -82,47 +82,36 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
 - **Rust NIF (optional)**: High-performance network evaluation
 - **Mnesia Storage**: Persistent genotype storage
 
-## Community vs Enterprise Edition
+## Native Acceleration
 
-This library is available in two editions:
+Rust NIFs for the numeric hot paths ship with this package and are built from
+source at compile time. A Rust toolchain is required.
 
-| Feature | Community (hex.pm) | Enterprise |
-|---------|-------------------|------------|
-| TWEANN topology evolution | Yes | Yes |
-| LTC/CfC neurons | Yes | Yes |
-| Weight evolution | Yes | Yes |
-| Speciation | Yes | Yes |
-| **Rust NIF acceleration** | No (pure Erlang) | Yes (30-200x faster) |
-| **Source code** | Hex package only | Full repository |
-
-### Community Edition
-
-The hex.pm package uses pure Erlang implementations for all algorithms. This is fully functional and suitable for:
-- Learning and experimentation
-- Small to medium populations (< 1000 individuals)
-- Development and prototyping
+There is one edition. The `faber-nn-nifs` package was absorbed into
+faber_tweann in v2.0.0; if you depended on `faber_nn_nifs` directly, depend on
+`faber_tweann` instead.
 
 ```erlang
-%% Check if NIFs are available
-tweann_nif:is_loaded().  %% Returns false on Community Edition
+tweann_nif:impl().       %% faber_nn_nifs | tweann_nif_fallback
+tweann_nif:is_loaded().  %% true when the native path is active
 ```
 
-### Enterprise Edition
+The native path is the default. If the library is missing or fails to load,
+faber_tweann raises on first use rather than quietly falling back. To use the
+pure Erlang implementation deliberately:
 
-Enterprise users with full source access can enable Rust NIF acceleration by:
+```erlang
+[{faber_tweann, [{nif_impl, fallback}]}].
+```
 
-1. Installing Rust toolchain (rustup.rs)
-2. Uncommenting NIF hooks in `rebar.config`
-3. Building from source
+See the [Native Acceleration](guides/native-nifs.md) guide.
 
-NIF-accelerated functions include:
-- `fitness_stats/1` - Population statistics (30x faster)
-- `tournament_select/2` - Selection (50x faster)
-- `roulette_select/3` - Selection (40x faster)
-- `knn_novelty/4` - Novelty search (200x faster)
-- `evaluate/2` - Network forward pass (100x faster)
-
-Contact [R.G. Lefever](https://rgfaber) for enterprise licensing.
+> **On performance claims:** earlier versions of this README quoted speedups
+> between 30x and 200x, while the faber-nn-nifs README quoted 10-15x for the
+> same code. Neither figure was backed by a committed measurement, and the two
+> were mutually inconsistent. No speedup figures are published here until a
+> benchmark runs and its output is committed. `test/benchmark/bench_nif_vs_erlang.erl`
+> exists for this purpose.
 
 ## Architecture
 

@@ -2,14 +2,22 @@
 %%
 %% This module provides accelerated network evaluation for TWEANN.
 %%
-%% == Implementation Priority ==
+%% == Implementation Selection ==
 %%
-%% 1. **Enterprise (faber_nn_nifs)**: If the faber_nn_nifs dependency is
-%%    available (private git repo), its Rust NIFs are used automatically.
-%%    This provides 10-15x speedup for compute-intensive operations.
+%% The Rust NIFs ship with faber_tweann (absorbed from the faber-nn-nifs
+%% package in v2.0.0) and are built from source at compile time. The native
+%% path is therefore the default, and its absence is an error rather than a
+%% condition to absorb silently.
 %%
-%% 2. **Pure Erlang (tweann_nif_fallback)**: If enterprise NIFs are not
-%%    available, pure Erlang implementations are used. Always works.
+%% Select with {faber_tweann, [{nif_impl, Impl}]}:
+%%
+%%   nif      - require the native path (faber_nn_nifs). Default.
+%%              Raises on first use if the library is missing or unloadable.
+%%   fallback - require the pure Erlang path (tweann_nif_fallback).
+%%              For platforms without a Rust toolchain, and for differential
+%%              testing of the native path against a reference implementation.
+%%
+%% Call tweann_nif:impl/0 to report the active path. Do so in any benchmark.
 %%
 %% == Usage ==
 %%
@@ -46,6 +54,7 @@
     compatibility_distance/5,
     benchmark_evaluate/3,
     is_loaded/0,
+    impl/0,
     %% Signal aggregation
     dot_product_flat/3,
     dot_product_batch/1,
@@ -95,34 +104,100 @@
 -define(IMPL_KEY, {?MODULE, impl_module}).
 
 %% @private
-%% @doc Initialize the implementation module.
+%% @doc Module load hook.
 %%
-%% Priority order:
-%% 1. faber_nn_nifs (enterprise - private git repo)
-%% 2. tweann_nif_fallback (pure Erlang)
+%% Implementation selection is deliberately NOT done here. At on_load time the
+%% application environment may not be loaded yet, so a {faber_tweann,
+%% [{nif_impl, _}]} setting would be invisible and the default would silently
+%% win. Selection happens lazily on first use, in impl_module/0.
 init() ->
-    ImplModule = detect_impl_module(),
-    persistent_term:put(?IMPL_KEY, ImplModule),
     ok.
 
 %% @private
-%% @doc Detect which implementation module to use.
+%% @doc Select the implementation module.
+%%
+%% The NIFs ship with faber_tweann and are built from source, so the native
+%% path is the default and its absence is an error, not a condition to be
+%% silently absorbed.
+%%
+%% Configure with {faber_tweann, [{nif_impl, Impl}]} where Impl is:
+%%   nif      - require the native path, fail loudly if unavailable (default)
+%%   fallback - require the pure Erlang path, for platforms without Rust
+%%              and for differential testing against the native path
+%%
+%% A silent fallback is deliberately not offered. This exact pattern
+%% previously let a broken crypto path run undetected in another package: the
+%% system kept working, slowly and wrongly, and no log line said so.
 detect_impl_module() ->
+    case application:get_env(faber_tweann, nif_impl, nif) of
+        fallback ->
+            tweann_nif_fallback;
+        nif ->
+            require_nif();
+        Other ->
+            erlang:error({bad_nif_impl, Other, [nif, fallback]})
+    end.
+
+%% @private
+require_nif() ->
     case code:which(faber_nn_nifs) of
         non_existing ->
-            tweann_nif_fallback;
+            erlang:error(
+                {faber_nn_nifs_not_available,
+                 "faber_tweann was built without its native library. Rebuild with "
+                 "a Rust toolchain available, or set "
+                 "{faber_tweann, [{nif_impl, fallback}]} to use the pure Erlang "
+                 "implementation deliberately."}
+            );
         _ ->
             case faber_nn_nifs:is_loaded() of
-                true -> faber_nn_nifs;
-                false -> tweann_nif_fallback
+                true ->
+                    faber_nn_nifs;
+                false ->
+                    erlang:error(
+                        {faber_nn_nifs_not_loaded,
+                         "The faber_nn_nifs module is present but its shared library "
+                         "failed to load. Check priv/libfaber_nn_nifs.so, or set "
+                         "{faber_tweann, [{nif_impl, fallback}]} to use the pure "
+                         "Erlang implementation deliberately."}
+                    )
             end
     end.
 
 %% @private
+%% @doc Resolve the implementation module, caching the result.
+%%
+%% Resolution happens once, on first use, and announces itself. Any benchmark
+%% number that does not name its execution path is not a number.
 impl_module() ->
-    persistent_term:get(?IMPL_KEY, tweann_nif_fallback).
+    case persistent_term:get(?IMPL_KEY, undefined) of
+        undefined ->
+            Impl = detect_impl_module(),
+            persistent_term:put(?IMPL_KEY, Impl),
+            announce_impl(Impl),
+            Impl;
+        Impl ->
+            Impl
+    end.
 
-%% @doc Check if enterprise NIFs are loaded.
+%% @private
+announce_impl(faber_nn_nifs) ->
+    tweann_logger:info("tweann_nif: native path active (faber_nn_nifs)", []);
+announce_impl(tweann_nif_fallback) ->
+    tweann_logger:warning(
+        "tweann_nif: pure Erlang fallback active by explicit configuration. "
+        "Evaluation will be substantially slower than the native path.",
+        []
+    ).
+
+%% @doc Report which implementation is active: faber_nn_nifs | tweann_nif_fallback.
+%%
+%% Call this in any benchmark or experiment log.
+-spec impl() -> faber_nn_nifs | tweann_nif_fallback.
+impl() ->
+    impl_module().
+
+%% @doc Check whether the native NIF path is active.
 -spec is_loaded() -> boolean().
 is_loaded() ->
     impl_module() =:= faber_nn_nifs.

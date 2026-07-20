@@ -10,6 +10,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.0.0]
+
+### Changed (breaking)
+
+- **Absorbed the `faber-nn-nifs` package.** The Rust NIFs now ship with
+  faber_tweann and are built from source by `priv/build-nifs.sh` during
+  compilation. Remove `faber_nn_nifs` from your deps. A Rust toolchain is now
+  required; use `FABER_TWEANN_SKIP_NIF=1` to build without one.
+
+- **Removed the silent NIF fallback.** Implementation is selected explicitly
+  via `{faber_tweann, [{nif_impl, nif | fallback}]}`, defaulting to `nif`. If
+  the native library is missing or unloadable, faber_tweann now raises on
+  first use with an explanatory error instead of quietly running the slower
+  pure Erlang path. Selection is resolved lazily on first use, not in
+  `-on_load`, because the application environment is not necessarily loaded at
+  module load time.
+
+- **Corrected `weight_distance_l1/2`.** The native implementation divided by
+  vector length, computing mean absolute deviation rather than Manhattan
+  distance. It now returns the sum, agreeing with the Erlang fallback. Callers
+  relying on the old normalized value will see results larger by a factor of
+  the vector length.
+
+- **Corrected `weight_distance_l2/2`.** Likewise divided by `sqrt(length)`,
+  computing a root-mean-square deviation rather than Euclidean distance.
+
+- **Corrected `weight_distance_batch/3`.** Took a boolean and returned
+  `{Index, Distance}` pairs sorted ascending. It now takes the metric as the
+  atom `l1` or `l2` and returns one distance per input vector in input order,
+  matching the documented spec and the Erlang fallback.
+
+- **Corrected `random_weights_batch/1`.** Took a bare list of sizes and
+  produced uniform weights in `[-1, 1]`, silently discarding the requested
+  mean and standard deviation. It now takes `{Count, Mean, StdDev}` specs and
+  produces gaussian weights, matching the Erlang fallback.
+
+### Fixed
+
+- **ONNX export has been broken since v1.2.0.** `network_onnx:get_network_data/1`
+  matched `#network{}` as a fixed-arity tuple. The CfC/LTC work added
+  `neuron_meta` and `internal_state`, so every export raised `function_clause`
+  and returned `{error, {onnx_export_failed, ...}}`. `network_evaluator` now
+  exposes `get_layers/1`, `get_activation/1` and `get_output_activation/1`, and
+  `network_onnx` uses them, so further record fields cannot break consumers
+  silently.
+
+### Added
+
+- `tweann_nif:impl/0` reports the active implementation. Record it in any
+  benchmark; a performance number that does not name its execution path is not
+  a number.
+- `test/unit/nif_fallback_conformance_tests.erl` runs the native and fallback
+  implementations over the same inputs and asserts they agree. The four
+  contract bugs above survived because each package tested only its own side.
+
+### Removed
+
+- The "Community vs Enterprise Edition" framing from the README, the
+  `guides/enterprise-nifs.md` guide, and the installation guide. There was
+  never a second edition; the NIF repository was simply private. Replaced by
+  `guides/native-nifs.md`.
+- Unbacked performance claims. The README quoted 30-200x while the
+  faber-nn-nifs README quoted 10-15x for the same code, with no committed
+  measurement behind either. No figures are published until a benchmark runs
+  and its output is committed.
+
 ---
 
 ## [0.16.0] - 2025-12-23
