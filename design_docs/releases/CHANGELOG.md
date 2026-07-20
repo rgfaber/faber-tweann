@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.0.1]
+
+### Fixed
+
+- **v2.0.0 on hex is unbuildable. This release fixes it.** The published 2.0.0
+  package shipped without `native/`, so `priv/build-nifs.sh` hard-errors with
+  "no crate source" and every consumer fails to compile. The hard error is
+  correct behaviour, introduced in 2.0.0 when the silent fallback was removed;
+  the packaging was what was wrong.
+
+  Root cause: `rebar3_hex` reads the package file list from
+  `rebar_app_info:app_details/1`, which is `src/faber_tweann.app.src`, not from
+  rebar.config's `{hex, [{files, ...}]}` block. See `rebar3_hex_build.erl:446`,
+  `proplists:get_value(files, AppDetails, ?DEFAULT_FILES)`. The list had been
+  placed in rebar.config, where the plugin never reads it, so the publish
+  silently fell back to the default file set and dropped `native/`, `assets/`,
+  `guides/` and `ROADMAP.md`. `licenses` and `links` shipped correctly in 2.0.0
+  precisely because they already lived in `.app.src`.
+
+  The file list now lives in `.app.src`, and the crate's paths are enumerated
+  individually rather than as a bare `native` directory, because a directory
+  glob sweeps in `native/faber_nn_nifs/target/` and exceeds hex's 16.7 MB
+  compressed limit.
+
+  Verified by unpacking the built tarball and running `priv/build-nifs.sh`
+  against it: the NIF compiles and `priv/libfaber_nn_nifs.so` is produced.
+
+### Changed
+
+- `links` now lists Codeberg first, with GitHub marked as a mirror. Codeberg is
+  canonical.
+
 ## [2.0.0]
 
 ### Changed (breaking)

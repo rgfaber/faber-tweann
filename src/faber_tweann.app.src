@@ -1,6 +1,6 @@
 {application, faber_tweann,
  [{description, "Faber TWEANN - Topology and Weight Evolving Artificial Neural Networks"},
-  {vsn, "2.0.0"},
+  {vsn, "2.0.1"},
   {registered, [faber_tweann_sup, morphology_registry]},
   {mod, {faber_tweann_app, []}},
   {applications,
@@ -11,5 +11,37 @@
   {env,[]},
   {modules, []},
   {licenses, ["Apache-2.0"]},
-  {links, [{"GitHub", "https://github.com/rgfaber/faber-tweann"}]}
+  {links, [{"Codeberg", "https://codeberg.org/rgfaber/faber-tweann"},
+           {"GitHub (mirror)", "https://github.com/rgfaber/faber-tweann"}]},
+
+  %% Hex package contents.
+  %%
+  %% This MUST live here, not in rebar.config's {hex, [...]} block. rebar3_hex
+  %% reads it via rebar_app_info:app_details/1 (rebar3_hex_build.erl:446,
+  %% proplists:get_value(files, AppDetails, ?DEFAULT_FILES)), and AppDetails is
+  %% this file. A {files, ...} entry under {hex, ...} in rebar.config is dead
+  %% config: the plugin never reads it and silently uses its default file set.
+  %%
+  %% That is exactly how v2.0.0 shipped without native/, which made it
+  %% unbuildable for every consumer: priv/build-nifs.sh hard-errors when the
+  %% crate source is absent, by design, since v2.0.0 removed the silent
+  %% fallback. licenses and links shipped correctly in 2.0.0 precisely because
+  %% they were already here rather than in rebar.config.
+  %% List the crate's paths explicitly rather than the bare "native" directory.
+  %% A bare directory glob sweeps in native/faber_nn_nifs/target/, the Rust
+  %% build output, which blows past hex's 16.7 MB compressed package limit.
+  %% Same approach as macula's rebar.config.
+  {files, ["src",
+           "include",
+           "native/faber_nn_nifs/Cargo.toml",
+           "native/faber_nn_nifs/Cargo.lock",
+           "native/faber_nn_nifs/src",
+           "priv/build-nifs.sh",
+           "assets",
+           "design_docs/releases/CHANGELOG.md",
+           "guides",
+           "rebar.config",
+           "README.md",
+           "ROADMAP.md",
+           "LICENSE"]}
  ]}.
