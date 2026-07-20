@@ -58,9 +58,10 @@ drive it, and none exist here:
 
 Until this lands, faber-tweann is a topology-and-weight evolver but not DXNN.
 
-## 2b. Genotype lifecycle integrity across generations
+## 2b. Genotype lifecycle integrity across generations — DONE
 
-**Status:** blocks evolution through the process-per-neuron path (insight 010).
+**Status:** fixed (insight 011). Evolution runs 150+ generations, fitness
+climbs monotonically. What remains is search quality, item 2c.
 
 A single evaluation runs end to end (insight 009) and the population_monitor
 drives one full generation of Sher-path evaluations. Multi-generation
@@ -76,6 +77,22 @@ operators adding connections the feedforward evaluator cannot order.
 Until this is fixed, evolution cannot solve XOR through this path, and the
 comparison against the domain_sdk control (insight 004, median 550
 evaluations) cannot be made.
+
+
+## 2c. Topology-search quality (actually solve XOR)
+
+**Status:** evolution improves but does not yet solve (insight 011).
+
+Best fitness plateaus around RMSE 0.36 on XOR because add_neuron splices
+chains, and XOR needs the output to combine two parallel hidden units. The
+mutation set can build that but random search reaches it slowly. Options: bias
+mutation toward parallel structure, or adopt NEAT-style structural innovation
+(the innovation module exists but is underused). Only once XOR solves through
+this path can the Table 14.1 / insight-004 control comparison be made.
+
+Also under this heading: the memetic tuner's max_attempts is hardcoded to 15
+(the tuning_duration module that would compute it is still missing, item 2).
+More attempts is more weight optimisation per agent.
 
 ## 3. Mnesia genotype storage (Handbook Ch 8.4.1)
 
