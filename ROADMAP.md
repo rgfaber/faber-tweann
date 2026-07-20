@@ -30,11 +30,17 @@ produces real fitness (insight 009), and the population_monitor drives a full
 generation of such evaluations (insight 010).
 
 Still open under this heading:
-- Only `xor_sim` exists. `pb_sim` (Handbook Ch 14), `fx_sim` (Ch 19), `flatland`
-  (Ch 18) and `snake_duel` remain, referenced by their morphologies.
+- `xor_sim` and `pb_sim` exist. `pb_sim` (Handbook Ch 14) is a faithful port of
+  the cart-pole physics with four variants (single/double pole x with/without
+  velocity); `pb_1_with_velocity` solves through the DXNN path (insight 015).
+  `fx_sim` (Ch 19), `flatland` (Ch 18) and `snake_duel` remain, referenced by
+  their morphologies.
 - Recurrent networks are not supported: a recurrent neuron waits on a feedback
-  input that nothing produces on the first cycle. Only feedforward works.
-- Multi-generation evolution works and solves XOR; see 2b, 2c.
+  input that nothing produces on the first cycle. Only feedforward works. This
+  is the prerequisite for the WITHOUT-velocity pole variants (non-Markov, need
+  memory) and for any LTC/CfC comparison.
+- Multi-generation evolution works and solves XOR and pole; see 2b, 2c and
+  insight 015.
 
 The message protocol is specified in `faber-ecosystem/docs/PROTOCOL.md`.
 
