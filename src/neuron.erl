@@ -268,6 +268,28 @@ loop(State) ->
                 compiled_weights = CompiledWeights
             });
 
+        %% Two-phase evaluation reset (driven by the exoself between tuning
+        %% attempts). Phase 1: flush any stale forward signals left in the
+        %% mailbox from the previous evaluation, clear the input accumulator, and
+        %% ack. Phase 2 (reset): re-seed recurrent targets with [0.0] so they do
+        %% not deadlock on the next evaluation's first cycle. The exoself only
+        %% sends `reset' after every neuron has acked, so this neuron's seed
+        %% cannot be flushed by a peer still in phase 1.
+        {reset_prep, ExoSelfPid} ->
+            flush_forwards(),
+            ExoSelfPid ! {neuron_reset_ready, self()},
+            receive
+                reset ->
+                    seed_recurrent_inputs(State#state.ro_pids),
+                    loop(State#state{acc_input = #{}});
+                {cortex, terminate} ->
+                    handle_cleanup(State),
+                    ok;
+                terminate ->
+                    handle_cleanup(State),
+                    ok
+            end;
+
         %% Catch-all: log and discard unexpected messages to prevent mailbox bloat
         UnexpectedMsg ->
             tweann_logger:warning("Neuron ~p received unexpected message: ~p",
@@ -284,6 +306,15 @@ seed_recurrent_inputs(RoPids) ->
     Self = self(),
     _ = [RoPid ! {forward, Self, [0.0]} || RoPid <- RoPids],
     ok.
+
+%% @private Drain any stale forward signals left in the mailbox from a previous
+%% evaluation (e.g. a recurrent feedback signal not consumed before the run
+%% halted), so the next evaluation starts clean.
+flush_forwards() ->
+    receive
+        {forward, _From, _Signal} -> flush_forwards()
+    after 0 -> ok
+    end.
 
 %% @private Cleanup on termination
 handle_cleanup(State) ->

@@ -253,7 +253,25 @@ loop(State) ->
             loop(State#state{bias = BiasWeight});
 
         {link, input_weights, InputWeights} ->
-            loop(State#state{input_weights = InputWeights})
+            loop(State#state{input_weights = InputWeights});
+
+        %% Two-phase evaluation reset (see neuron.erl). Phase 1 flushes stale
+        %% signals, clears the accumulator, acks. Phase 2 re-seeds recurrent
+        %% targets AND zeroes the temporal memory, so each evaluation starts from
+        %% a clean internal_state.
+        {reset_prep, ExoSelfPid} ->
+            flush_forwards(),
+            ExoSelfPid ! {neuron_reset_ready, self()},
+            receive
+                reset ->
+                    _ = [RoPid ! {forward, self(), [0.0]}
+                         || RoPid <- State#state.ro_pids],
+                    loop(State#state{acc_input = #{}, internal_state = 0.0});
+                {cortex, terminate} ->
+                    ok;
+                terminate ->
+                    ok
+            end
     after Timeout ->
         handle_input_timeout(State)
     end.
@@ -269,6 +287,13 @@ update_ltc_params(State, Params) ->
                                     State#state.ltc_head_weights),
         dt = maps:get(dt, Params, State#state.dt)
     }.
+
+%% @private Drain stale forward signals before a fresh evaluation.
+flush_forwards() ->
+    receive
+        {forward, _From, _Signal} -> flush_forwards()
+    after 0 -> ok
+    end.
 
 %% @private Handle input timeout
 handle_input_timeout(State) ->

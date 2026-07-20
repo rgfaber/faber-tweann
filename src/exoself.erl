@@ -538,6 +538,7 @@ loop(State) ->
             %% Continue with next tuning attempt
             case CurrentAttempt < MaxAttempts of
                 true ->
+                    reset_neurons(State),
                     perturb_weights(State),
                     cortex:sync(CortexPid),
                     loop(State#exoself_state{current_attempt = CurrentAttempt + 1});
@@ -603,6 +604,7 @@ handle_evaluation_complete(Fitness, HaltFlag, State) ->
     case CurrentAttempt < MaxAttempts of
         true ->
             reset_scapes(NewState),
+            reset_neurons(NewState),
             perturb_weights(NewState),
             cortex:sync(CortexPid),
             loop(NewState#exoself_state{current_attempt = CurrentAttempt + 1});
@@ -646,6 +648,34 @@ finish(State) ->
 reset_scapes(#exoself_state{private_scape_pids = Pids}) ->
     [ Pid ! {self(), reset} || Pid <- Pids ],
     ok.
+
+%% @private Reset all neurons between evaluation attempts, two-phase so recurrent
+%% seeds are never lost to a flush.
+%%
+%% The memetic tuner re-evaluates the SAME neuron processes many times per
+%% generation. Without a reset, a recurrent neuron waits on a feedback signal
+%% that the previous attempt's final cycle may not have produced, hits its 10s
+%% input_timeout, and the run grinds to a halt (every recurrent agent stalled for
+%% seconds per attempt). LTC neurons likewise carry stale internal_state.
+%%
+%% Phase 1 (reset_prep): every neuron flushes any stale forward signals from its
+%% mailbox, clears its input accumulator, and acks. Phase 2 (reset), sent only
+%% after ALL neurons have flushed, re-seeds recurrent targets with [0.0] and
+%% zeroes LTC internal_state. The barrier guarantees no neuron's fresh seed is
+%% flushed by a neuron that had not yet reached phase 1.
+reset_neurons(#exoself_state{neuron_pids = NeuronPids}) ->
+    Self = self(),
+    [ Pid ! {reset_prep, Self} || Pid <- NeuronPids ],
+    gather_neuron_ready(length(NeuronPids)),
+    [ Pid ! reset || Pid <- NeuronPids ],
+    ok.
+
+gather_neuron_ready(0) -> ok;
+gather_neuron_ready(N) ->
+    receive
+        {neuron_reset_ready, _Pid} -> gather_neuron_ready(N - 1)
+    after 5000 -> ok  %% a dead/stuck neuron must not hang the whole agent
+    end.
 
 %% @private Perturb weights using simulated annealing.
 -spec perturb_weights(#exoself_state{}) -> ok.
