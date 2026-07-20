@@ -40,23 +40,29 @@ The message protocol is specified in `faber-ecosystem/docs/PROTOCOL.md`.
 
 ## 2. The memetic tuning layer (Handbook Ch 10)
 
-**Status:** configured but never invoked.
+**Status:** `tuning_selection` + `tuning_duration` DONE (insight 014).
+`tot_topological_mutations` still fixed.
 
 DXNN2's distinguishing property over NEAT is that it interleaves a stochastic
 hill-climber over synaptic weights with topological evolution. Three modules
-drive it, and none exist here:
+drive it:
 
-| Module | Role | Called from, in DXNN2 |
+| Module | Role | State |
 |---|---|---|
-| `tuning_selection` | chooses which neurons to perturb | `exoself:219`, `genome_mutator:218,262` |
-| `tuning_duration` | computes `max_attempts` per agent per generation | `exoself:137` |
-| `tot_topological_mutations` | how many topological mutations to apply | `genome_mutator:71` |
+| `tuning_selection` | chooses which neurons to perturb | **built** — `src/tuning_selection.erl` (dynamic / dynamic_random / active / current / all), invoked from `exoself:perturb_weights/1` |
+| `tuning_duration` | computes `max_attempts` per agent per generation | **built** — `src/tuning_duration.erl` (const / wsize_proportional), invoked from `exoself:compute_max_attempts/1` |
+| `tot_topological_mutations` | how many topological mutations to apply | still a fixed count |
 
-`genotype.erl:212,214,217` assigns all three into the agent record and
-`exoself.erl:71-72,147-163` carries them in state. Nothing ever calls them.
-`exoself` uses a fixed `max_attempts` default (now 60; insight 012) where DXNN2 computes it per agent via `tuning_duration`.
+Both modules are faithful ports of DXNN2 and are now wired into `exoself`. The
+genotype default is DXNN2-faithful (`dynamic_random` + `wsize_proportional`).
 
-Until this lands, faber-tweann is a topology-and-weight evolver but not DXNN.
+**Surprise (insight 014):** the DXNN2-faithful shallow tuner does NOT solve XOR
+at a 30-agent / 50-generation budget — it plateaus at fitness ~1.2 while the
+crude deep tuner (`all` + `const 60`) solves 3/3. XOR is a small precise-weight
+problem where deep per-agent hill-climbing dominates and shallow-subset tuning
+is starved. The tuner's real payoff is expected on larger problems (pole
+balancing), which is the next measurement. `xor_evolves_tests` therefore pins
+the deep config explicitly; the default stays DXNN2-faithful.
 
 ## 2b. Genotype lifecycle integrity across generations — DONE
 
