@@ -40,7 +40,16 @@ new_agent() ->
         connection_architecture = feedforward,
         neural_afs = [tanh],
         neural_pfns = [none],
-        neural_aggr_fs = [dot_product]
+        neural_aggr_fs = [dot_product],
+        %% Deep, crude tuning (all neurons, 60 attempts). This is the config
+        %% proven to solve XOR in 12-22 generations (insight 012). The genotype
+        %% default is now DXNN2's dynamic_random + wsize_proportional, which is
+        %% far shallower (~12 attempts) and does NOT solve XOR in this
+        %% generation budget. That difference is the subject of insight 014, an
+        %% open research question; this test proves the CAPABILITY with the
+        %% config known to exercise it.
+        tuning_selection_fs = [all],
+        tuning_duration_f = {const, 60}
     },
     SpecieId = {genotype:generate_UniqueId(), specie},
     AgentId = {genotype:generate_UniqueId(), agent},

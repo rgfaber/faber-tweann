@@ -147,11 +147,27 @@ init(CallerPid, AgentId, PopMonitorPid, OpMode) ->
         actuator_ids = ActuatorIds
     },
 
+    %% Size the memetic tuning effort to this agent's network, via the
+    %% tuning_duration function the genotype assigned (insight 001 noted these
+    %% were assigned and never used). Replaces the fixed max_attempts default.
+    MaxAttempts = compute_max_attempts(FinalState),
+    TunedState = FinalState#exoself_state{max_attempts = MaxAttempts},
+
     %% Start evaluation
     cortex:sync(CortexPid),
 
     %% Enter main loop
-    loop(FinalState).
+    loop(TunedState).
+
+%% @private Attempts for this agent, from its tuning_duration function.
+compute_max_attempts(#exoself_state{tuning_duration_function = undefined,
+                                    max_attempts = Default}) ->
+    Default;
+compute_max_attempts(#exoself_state{tuning_duration_function = {Name, Param},
+                                    neuron_ids = NIds, generation = Gen}) ->
+    tuning_duration:duration(Name, Param, NIds, Gen);
+compute_max_attempts(#exoself_state{max_attempts = Default}) ->
+    Default.
 
 %% @private Initialize base state from agent record.
 -spec initialize_base_state(#agent{}, pid() | undefined, atom(), ets:tid()) -> #exoself_state{}.
@@ -596,24 +612,29 @@ reset_scapes(#exoself_state{private_scape_pids = Pids}) ->
 -spec perturb_weights(#exoself_state{}) -> ok.
 perturb_weights(State) ->
     #exoself_state{
-        neuron_pids = NeuronPids,
         perturbation_range = Range,
         annealing_parameter = AnnealingParam,
-        current_attempt = Attempt,
-        max_attempts = MaxAttempts
+        tuning_selection_function = SelectionF,
+        neuron_ids = NeuronIds,
+        generation = Generation,
+        id_to_process_map = IdMap
     } = State,
 
-    %% Calculate current perturbation using annealing schedule
-    Progress = Attempt / MaxAttempts,
-    CurrentRange = Range * math:pow(1 - Progress, AnnealingParam),
-
-    %% Perturb each neuron's weights
+    %% Select which neurons to perturb, and by how much, via the agent's
+    %% tuning_selection function. dynamic/dynamic_random perturb a subset
+    %% biased toward recently-changed neurons, each with its own age-annealed
+    %% spread, rather than jittering every neuron every attempt (insight 013).
+    Strategy = case SelectionF of undefined -> all; S -> S end,
+    Chosen = tuning_selection:select(Strategy, NeuronIds, Generation, Range, AnnealingParam),
     lists:foreach(
-        fun(NeuronPid) ->
-            NeuronPid ! {perturb, CurrentRange}
+        fun({NeuronId, Spread}) ->
+            case ets:lookup(IdMap, NeuronId) of
+                [{NeuronId, Pid}] -> Pid ! {perturb, Spread};
+                [] -> ok
+            end
         end,
-        NeuronPids
-    ).
+        Chosen),
+    ok.
 
 %% @private Backup current weights from all neurons.
 -spec backup_weights(#exoself_state{}) -> ok.
