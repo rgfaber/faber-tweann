@@ -225,7 +225,7 @@ evaluate(#network{layers = Layers, activation = Activation,
     OA = resolve_output_activation(OutputActivation, Activation),
     forward_propagate(Layers, Inputs, Activation, OA).
 
-%% @doc Load a network from a genotype stored in Mnesia.
+%% @doc Load a network from a genotype stored in ETS.
 %%
 %% Reads the agent's neural network structure and weights from Mnesia
 %% and creates an evaluator network.

@@ -8,7 +8,7 @@
 %%
 %% == Construction Process ==
 %%
-%% 1. Read agent genotype from Mnesia database
+%% 1. Read agent genotype from ETS
 %% 2. Spawn all sensors, neurons, and actuators
 %% 3. Build PID mappings from genotype IDs to process PIDs
 %% 4. Spawn cortex to coordinate the network

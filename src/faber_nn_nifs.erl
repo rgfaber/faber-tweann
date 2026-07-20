@@ -82,7 +82,7 @@
     mutate_weights_layered/6,
     compute_layer_weight_counts/1,
 
-    %% P0: SIMD Batch Activations
+    %% P0: Batch Activations
     tanh_batch/1,
     sigmoid_batch/1,
     relu_batch/1,
@@ -393,20 +393,20 @@ compute_layer_weight_counts(_Topology) ->
     erlang:nif_error(nif_not_loaded).
 
 %% ============================================================================
-%% P0: SIMD Batch Activations
+%% P0: Batch Activations
 %% ============================================================================
 
-%% @doc Apply tanh activation to a batch of values using SIMD.
+%% @doc Apply tanh activation to a batch of values elementwise.
 -spec tanh_batch([float()]) -> [float()].
 tanh_batch(_Values) ->
     erlang:nif_error(nif_not_loaded).
 
-%% @doc Apply sigmoid activation to a batch of values using SIMD.
+%% @doc Apply sigmoid activation to a batch of values elementwise.
 -spec sigmoid_batch([float()]) -> [float()].
 sigmoid_batch(_Values) ->
     erlang:nif_error(nif_not_loaded).
 
-%% @doc Apply ReLU activation to a batch of values using SIMD.
+%% @doc Apply ReLU activation to a batch of values elementwise.
 -spec relu_batch([float()]) -> [float()].
 relu_batch(_Values) ->
     erlang:nif_error(nif_not_loaded).

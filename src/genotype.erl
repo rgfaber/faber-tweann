@@ -8,7 +8,7 @@
 %%
 %% == Genotype Structure ==
 %%
-%% A genotype is a collection of interconnected elements stored in Mnesia:
+%% A genotype is a collection of interconnected elements stored in ETS:
 %%
 %% - Agent - Top-level container for a neural network
 %% - Cortex - Network coordinator, references sensors/neurons/actuators

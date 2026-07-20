@@ -157,7 +157,7 @@ diff_product(InputSignals, WeightedInputs) ->
 %% This function attempts to use the Rust NIF for dot product computation.
 %% Falls back to pure Erlang if NIF is not loaded.
 %%
-%% Performance: 40-100x faster than pure Erlang for N > 10 inputs.
+%% Performance: not measured. No committed benchmark output exists; see ROADMAP.md section 6.
 %%
 %% @param InputSignals List of {SourceId, SignalVector} tuples
 %% @param WeightedInputs List of {SourceId, [WeightSpec]} tuples
