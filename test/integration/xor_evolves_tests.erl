@@ -1,16 +1,17 @@
-%% @doc The population_monitor drives Sher-path evaluation across a generation.
+%% @doc Evolution SOLVES XOR through DXNN2's process-per-neuron path.
 %%
-%% Phase 3. Insight 009 proved a single agent runs end to end. This proves the
-%% population_monitor's generational machinery drives a whole population of
-%% agents through that same path, collecting real fitness from each.
+%% Phase 3, complete. Insight 009 proved a single agent runs end to end; 010
+%% proved the population loop drives a generation; 011 fixed the lifecycle and
+%% the memetic tuner; 012 found that 60 tuning attempts (up from 15) let good
+%% topologies fully tune, so XOR now solves.
 %%
-%% What it does NOT yet prove: that evolution SOLVES XOR across many
-%% generations. Multi-generation evolution currently crashes in the genotype
-%% lifecycle (repeated clone/mutate/delete produces topologies the
-%% process-per-neuron evaluator cannot link or evaluate). That is a separate
-%% subsystem from the scape and fitness channel, recorded in insight 010 and on
-%% the roadmap. This test is deliberately scoped to one generation so it proves
-%% what works without asserting what does not.
+%% Every agent is evaluated through the full Sher path: scape, fitness channel,
+%% memetic weight tuning, exoself_terminated. The scape's goal_reached signal
+%% (all four cases correct) is what stops the run, and stopping BECAUSE the task
+%% was solved rather than at the generation cap is the whole point.
+%%
+%% This test is slow (a full evolutionary run with 60 tuning attempts per
+%% agent). It is the proof that the DXNN path works, so it earns its keep.
 %%
 %% @copyright 2024-2026 R.G. Lefever
 %% @license Apache-2.0
@@ -29,9 +30,9 @@ setup() ->
 teardown(_) ->
     ok.
 
-population_generation_test_() ->
+evolution_solves_xor_test_() ->
     {setup, fun setup/0, fun teardown/1,
-     {timeout, 120, fun one_generation_evaluates_through_sher_path/0}}.
+     {timeout, 300, fun evolution_solves_xor/0}}.
 
 new_agent() ->
     Constraint = #constraint{
@@ -46,32 +47,42 @@ new_agent() ->
     genotype:construct_Agent(SpecieId, AgentId, Constraint),
     AgentId.
 
-one_generation_evaluates_through_sher_path() ->
-    PopSize = 20,
+evolution_solves_xor() ->
+    %% Trap exits: a malformed offspring may crash its evaluation, and the
+    %% population must survive it (population_monitor scores it [0.0]).
+    process_flag(trap_exit, true),
+
+    PopSize = 30,
     AgentIds = [new_agent() || _ <- lists:seq(1, PopSize)],
 
     {ok, Pid} = population_monitor:start_link(#{
-        population_id => xor_gen,
+        population_id => xor_solve,
         operation_mode => test,
         agent_ids => AgentIds,
-        %% One generation: evaluate the whole fresh population, then stop
-        %% before reproduction. Multi-generation reproduction is blocked on
-        %% the lifecycle bug in insight 010.
-        max_generations => 1,
-        survival_rate => 0.5,
+        %% Observed to solve in 12-22 generations across seeds; 80 is ample.
+        max_generations => 80,
+        survival_rate => 0.4,
+        %% Backstop only. The real stop is the scape's goal_reached signal.
         fitness_goal => [1.0e6],
         notify_pid => self()
     }),
-
+    %% Let the gen_server settle before starting.
+    timer:sleep(50),
     population_monitor:start_evaluation(Pid),
 
     receive
         {population_complete, Info} ->
-            ?assertEqual(1, maps:get(generation, Info)),
-            BestFitness = maps:get(best_fitness, Info),
-            %% Real fitness collected through the Sher path, not the [0.0] that
-            %% the old timeout produced when nothing sent exoself_terminated.
-            ?assertMatch([F] when is_number(F) andalso F > 0.0, BestFitness)
-    after 110000 ->
+            Reason = maps:get(reason, Info),
+            Generation = maps:get(generation, Info),
+            ?assertEqual(solved, Reason,
+                lists:flatten(io_lib:format(
+                    "evolution did not solve XOR through the Sher path; "
+                    "ended by ~p at generation ~p, best fitness ~p",
+                    [Reason, Generation, maps:get(best_fitness, Info)]))),
+            ?assert(Generation =< 80);
+        {'EXIT', Pid, Reason} ->
+            ?assert(false, lists:flatten(
+                io_lib:format("population monitor died: ~p", [Reason])))
+    after 290000 ->
         ?assert(false)
     end.

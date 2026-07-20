@@ -34,7 +34,7 @@ Still open under this heading:
   (Ch 18) and `snake_duel` remain, referenced by their morphologies.
 - Recurrent networks are not supported: a recurrent neuron waits on a feedback
   input that nothing produces on the first cycle. Only feedforward works.
-- Multi-generation evolution is blocked; see 2b.
+- Multi-generation evolution works and solves XOR; see 2b, 2c.
 
 The message protocol is specified in `faber-ecosystem/docs/PROTOCOL.md`.
 
@@ -54,7 +54,7 @@ drive it, and none exist here:
 
 `genotype.erl:212,214,217` assigns all three into the agent record and
 `exoself.erl:71-72,147-163` carries them in state. Nothing ever calls them.
-`exoself.erl:69` hardcodes `max_attempts = 15` where DXNN2 computes it.
+`exoself` uses a fixed `max_attempts` default (now 60; insight 012) where DXNN2 computes it per agent via `tuning_duration`.
 
 Until this lands, faber-tweann is a topology-and-weight evolver but not DXNN.
 
@@ -70,20 +70,21 @@ cascading through `spawn_link` to kill the run; and the memetic weight tuner
 being entirely dead (neurons ignored `perturb`/`backup`/`restore`). All fixed.
 
 
-## 2c. Topology-search quality (actually solve XOR)
+## 2c. Solve XOR through the DXNN path — DONE
 
-**Status:** evolution improves but does not yet solve (insight 011).
+**Status:** solved (insight 012). 4/4 runs solve at generations 12-22.
 
-Best fitness plateaus around RMSE 0.36 on XOR because add_neuron splices
-chains, and XOR needs the output to combine two parallel hidden units. The
-mutation set can build that but random search reaches it slowly. Options: bias
-mutation toward parallel structure, or adopt NEAT-style structural innovation
-(the innovation module exists but is underused). Only once XOR solves through
-this path can the Table 14.1 / insight-004 control comparison be made.
+The 011 plateau (RMSE 0.36) was a tuning-depth limit, not topology: raising the
+memetic hill-climber's attempts from 15 to 60 lets selection's good topologies
+tune to completion, and XOR falls. test/integration/xor_evolves_tests.erl is
+the permanent proof.
 
-Also under this heading: the memetic tuner's max_attempts is hardcoded to 15
-(the tuning_duration module that would compute it is still missing, item 2).
-More attempts is more weight optimisation per agent.
+Remaining under this heading, deferred:
+- max_attempts is a fixed default (60), not computed per agent. DXNN2 derives
+  it via tuning_duration (item 2).
+- Recurrent networks still lack first-cycle seeding; feedforward only.
+- The insight-004 control comparison (evaluations-to-solve, DXNN path vs
+  domain_sdk weight-only) is now unblocked and is the next real measurement.
 
 ## 3. Mnesia genotype storage (Handbook Ch 8.4.1)
 

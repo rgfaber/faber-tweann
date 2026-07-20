@@ -71,7 +71,11 @@
     evaluation_count = 0 :: non_neg_integer(),
     cycle_count = 0 :: non_neg_integer(),
     time_accumulated = 0 :: non_neg_integer(),
-    max_attempts = 15 :: pos_integer(),
+    %% Memetic hill-climbing steps per evaluation. 15 was too few: XOR
+    %% plateaued at RMSE ~0.36 because good topologies never got fully tuned.
+    %% 60 solves XOR reliably (insight 012). DXNN2 computes this per agent via
+    %% tuning_duration (roadmap item 2); until then it is a fixed default.
+    max_attempts = 60 :: pos_integer(),
     current_attempt = 1 :: pos_integer(),
     tuning_duration_function :: {atom(), number()} | undefined,
     tuning_selection_function :: atom() | undefined,
