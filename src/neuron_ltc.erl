@@ -67,7 +67,11 @@
     bias :: float(),
     acc_input :: #{pid() => [float()]},
     expected_inputs :: non_neg_integer(),
-    input_timeout :: pos_integer()
+    input_timeout :: pos_integer(),
+    %% Memetic tuning snapshots (weights only; LTC params evolve at the
+    %% generational level via ltc_mutations, not the per-agent tuner).
+    saved_weights = undefined :: undefined | map(),
+    saved_bias = undefined :: undefined | float()
 }).
 
 %% Default timeout for waiting on neuron inputs (10 seconds)
@@ -175,10 +179,38 @@ loop(State) ->
 
         backup ->
             _ = handle_backup(State),
-            loop(State);
+            loop(State#state{saved_weights = State#state.input_weights,
+                             saved_bias = State#state.bias});
 
+        %% Memetic tuning: jitter input weights and bias. The LTC-specific
+        %% parameters (tau, bound, backbone/head weights) evolve at the
+        %% generational level via ltc_mutations, not the per-agent tuner, so
+        %% this mirrors the standard neuron and keeps the two arms comparable.
+        {perturb, Range} ->
+            PerturbedWeights = maps:map(
+                fun(_Pid, WSpecs) ->
+                    perturbation_utils:perturb_weights(WSpecs, Range)
+                end,
+                State#state.input_weights),
+            PerturbedBias = perturbation_utils:sat(
+                State#state.bias + (rand:uniform() - 0.5) * Range, 3.1415926),
+            loop(State#state{input_weights = PerturbedWeights,
+                             bias = PerturbedBias});
+
+        %% Revert to the last backup (the perturbation was worse).
+        restore ->
+            case State#state.saved_weights of
+                undefined ->
+                    loop(State);
+                Saved ->
+                    loop(State#state{input_weights = Saved,
+                                     bias = State#state.saved_bias})
+            end;
+
+        %% Reset temporal memory at the start of each evaluation episode, so the
+        %% network's memory of one episode does not leak into the next.
         reset_state ->
-            loop(State#state{internal_state = 0.0});
+            loop(State#state{internal_state = 0.0, acc_input = #{}});
 
         {get_state, FromPid} ->
             FromPid ! {ltc_state, State#state.id, State#state.internal_state},
@@ -209,8 +241,16 @@ loop(State) ->
         {link, output_pids, OutputPids} ->
             loop(State#state{output_pids = OutputPids});
 
+        %% Seed recurrent targets with [0.0] so they do not deadlock on cycle 0
+        %% (see neuron.erl). LTC neurons carry memory in internal_state, so they
+        %% rarely need recurrent wiring, but this keeps the protocol uniform.
         {link, ro_pids, RoPids} ->
+            _ = [RoPid ! {forward, self(), [0.0]} || RoPid <- RoPids],
             loop(State#state{ro_pids = RoPids});
+
+        %% Bias is a constant input, extracted from input_idps by the exoself.
+        {link, bias, BiasWeight} ->
+            loop(State#state{bias = BiasWeight});
 
         {link, input_weights, InputWeights} ->
             loop(State#state{input_weights = InputWeights})

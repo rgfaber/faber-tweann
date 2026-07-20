@@ -282,18 +282,42 @@ spawn_neurons(State, Agent) ->
     lists:foldl(
         fun(NeuronId, {PidsAcc, IdsAcc}) ->
             Neuron = genotype:dirty_read({neuron, NeuronId}),
-            {ok, Pid} = neuron:start_link(#{
-                id => NeuronId,
-                cortex_pid => self(),
-                activation_function => Neuron#neuron.af,
-                aggregation_function => Neuron#neuron.aggr_f
-            }),
+            {ok, Pid} = spawn_neuron_by_type(Neuron, NeuronId),
             ets:insert(IdMap, {NeuronId, Pid}),
             {[Pid | PidsAcc], [NeuronId | IdsAcc]}
         end,
         {[], []},
         NeuronIds
     ).
+
+%% @private Spawn a neuron process, dispatching by neuron_type. Standard neurons
+%% run the plain weighted-sum-and-activation neuron; ltc/cfc neurons run
+%% neuron_ltc, which carries persistent internal state and continuous-time
+%% dynamics. This mirrors constructor:spawn_neuron_by_type/2, so the evolutionary
+%% path (population_monitor -> exoself) evaluates LTC genotypes as LTC, not as
+%% standard neurons that silently ignore their temporal parameters.
+-spec spawn_neuron_by_type(#neuron{}, term()) -> {ok, pid()}.
+spawn_neuron_by_type(#neuron{neuron_type = Type} = Neuron, NeuronId)
+  when Type =:= ltc; Type =:= cfc ->
+    neuron_ltc:start_link(#{
+        id => NeuronId,
+        cortex_pid => self(),
+        neuron_type => Type,
+        time_constant => Neuron#neuron.time_constant,
+        state_bound => Neuron#neuron.state_bound,
+        ltc_backbone_weights => Neuron#neuron.ltc_backbone_weights,
+        ltc_head_weights => Neuron#neuron.ltc_head_weights,
+        internal_state => Neuron#neuron.internal_state,
+        activation_function => Neuron#neuron.af,
+        aggregation_function => Neuron#neuron.aggr_f
+    });
+spawn_neuron_by_type(Neuron, NeuronId) ->
+    neuron:start_link(#{
+        id => NeuronId,
+        cortex_pid => self(),
+        activation_function => Neuron#neuron.af,
+        aggregation_function => Neuron#neuron.aggr_f
+    }).
 
 %% @private Spawn all actuator processes.
 -spec spawn_actuators(#exoself_state{}, #agent{}, #{atom() => pid()}) ->
