@@ -69,9 +69,16 @@ sense(_SensorName, [Variant], S) ->
 
 %% Act applies force F = Output * 10 (network output range +/-1 -> +/-10 N),
 %% integrates one control step, scores it, and decides whether to halt.
-act(_ActuatorName, Params, [Output], S) ->
+%%
+%% Output is the actuator's fan-in vector. A vl=1 actuator usually carries one
+%% value, but evolution can wire several neurons into it (add_outlink), so the
+%% vector may hold more than one; combine them by summing into a single force.
+%% Matching only [Output] crashed the scape with function_clause once a
+%% multi-fan-in actuator appeared (EXP_023, deep evolution).
+act(_ActuatorName, Params, Output, S) when is_list(Output) ->
     {DampingFlag, DPBFlag, Goal} = params(Params),
-    S1 = sm_double_pole(Output * 10, S, 2),
+    Force = lists:sum(Output),
+    S1 = sm_double_pole(Force * 10, S, 2),
     Failed = (abs(S1#state.p1_angle) > ?ANGLE_LIMIT)
         orelse (abs(S1#state.p2_angle) * DPBFlag > ?ANGLE_LIMIT)
         orelse (abs(S1#state.cpos) > ?TRACK_LIMIT),

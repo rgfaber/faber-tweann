@@ -65,10 +65,12 @@ sense_vector(Step, Junction, _Cue) when Step =:= Junction -> [0.0, 1.0];
 sense_vector(_Step, _Junction, _Cue) -> [0.0, 0.0].
 
 %% Act: advance through the corridor; at the junction, score the decision and
-%% either start the next trial or end the episode.
-act(_ActuatorName, Params, [Output], S) ->
+%% either start the next trial or end the episode. Output is the actuator's
+%% fan-in vector; a vl=1 actuator can still gather several neurons under
+%% evolution, so sum into a single decision value (see pb_sim:act/4).
+act(_ActuatorName, Params, Output, S) when is_list(Output) ->
     Junction = delay(Params, S) + 1,
-    act_step(S#state.step < Junction, Output, S).
+    act_step(S#state.step < Junction, lists:sum(Output), S).
 
 act_step(true, _Output, S) ->
     {0.0, 0, S#state{step = S#state.step + 1}};
