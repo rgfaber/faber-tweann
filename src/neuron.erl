@@ -237,7 +237,15 @@ loop(State) ->
         {link, output_pids, OutputPids} ->
             loop(State#state{output_pids = OutputPids});
 
+        %% Recurrent (feedback) output targets. A recurrent target sits at the
+        %% same or a lower layer, so it fires BEFORE this neuron each cycle and
+        %% would deadlock on cycle 0 waiting for a signal this neuron has not
+        %% produced yet. Seed each recurrent target with a default [0.0] now, so
+        %% it has all its inputs on the first cycle. From cycle 1 on, this
+        %% neuron's normal fan-out to ro_pids supplies the real feedback signal
+        %% (the previous cycle's output). Faithful to DXNN2 neuron:prep/1.
         {link, ro_pids, RoPids} ->
+            seed_recurrent_inputs(RoPids),
             loop(State#state{ro_pids = RoPids});
 
         %% Bias is a constant input, not a process. The add_bias mutation
@@ -268,6 +276,14 @@ loop(State) ->
     after Timeout ->
         handle_input_timeout(State)
     end.
+
+%% @private Seed each recurrent-output target with a default [0.0] signal so it
+%% does not deadlock on the first cycle. Sent as an ordinary forward from this
+%% neuron; the target counts it toward its expected inputs like any other.
+seed_recurrent_inputs(RoPids) ->
+    Self = self(),
+    _ = [RoPid ! {forward, Self, [0.0]} || RoPid <- RoPids],
+    ok.
 
 %% @private Cleanup on termination
 handle_cleanup(State) ->

@@ -313,13 +313,18 @@ link_neurons(NeuronIds, IdToPid) ->
 
             InputPids = [maps:get(InputId, IdToPid) || {InputId, _} <- InputIdps],
 
-            %% Get output PIDs from record
-            OutputIds = Neuron#neuron.output_ids,
-            OutputPids = [maps:get(Id, IdToPid) || Id <- OutputIds],
-
-            %% Get recurrent output PIDs from record
-            RoIds = Neuron#neuron.ro_ids,
-            RoPids = [maps:get(Id, IdToPid) || Id <- RoIds],
+            %% Partition outputs into feedforward and recurrent by layer, rather
+            %% than trusting the stored ro_ids (which mutations do not maintain).
+            %% A target at the same or a lower layer is a recurrent (feedback)
+            %% edge; a strictly higher layer is feedforward. The two sets are
+            %% disjoint, so a target never receives the signal twice.
+            NeuronLayer = layer_of(NeuronId),
+            {FeedforwardIds, RecurrentIds} = lists:partition(
+                fun(Id) -> layer_of(Id) > NeuronLayer end,
+                Neuron#neuron.output_ids
+            ),
+            OutputPids = [maps:get(Id, IdToPid) || Id <- FeedforwardIds],
+            RoPids = [maps:get(Id, IdToPid) || Id <- RecurrentIds],
 
             %% Update neuron with actual PIDs
             NeuronPid ! {link, input_pids, InputPids},
@@ -329,6 +334,10 @@ link_neurons(NeuronIds, IdToPid) ->
         end,
         NeuronIds
     ).
+
+%% Layer coordinate of an id {{Layer, Unique}, Type}. Sensors are -1, neurons
+%% sit between, actuators are +1; spliced neurons take fractional layers.
+layer_of({{Layer, _Unique}, _Type}) when is_number(Layer) -> Layer.
 
 %% Link actuators to their fanin neurons
 link_actuators(ActuatorIds, IdToPid) ->

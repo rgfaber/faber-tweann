@@ -323,13 +323,18 @@ spawn_actuators(State, Agent, ScapeMap) ->
 
 %% @private Split a `bias' entry out of a neuron's input_idps.
 %%
-%% add_bias records bias as {bias, [Weight]} among the inputs. It is a constant
-%% contribution, not a signal from another process, so it must not be resolved
-%% to a pid. Returns {BiasWeight, RealInputIdps}, defaulting to 0.0 when the
-%% neuron has no bias.
+%% add_bias records bias as {bias, [{Weight, Delta, LR, Params}]} among the
+%% inputs, the same weight-spec form as every other connection (topological_
+%% mutations:do_add_bias/2 via create_random_weight/0). The phenotype neuron
+%% treats bias as a plain SCALAR (added during aggregation, perturbed as a
+%% number), so this boundary must extract the scalar weight from the spec.
+%% Returning the whole tuple made `bias + Number' in the perturb handler crash
+%% with badarith. It is a constant contribution, not a signal from a process, so
+%% it is never resolved to a pid. Defaults to 0.0 when the neuron has no bias.
 extract_bias(InputIdps) ->
     case lists:keytake(bias, 1, InputIdps) of
-        {value, {bias, [W]}, Rest} -> {W, Rest};
+        {value, {bias, [{W, _Delta, _LR, _Params}]}, Rest} -> {W, Rest};
+        {value, {bias, [W]}, Rest} when is_number(W) -> {W, Rest};
         {value, {bias, W}, Rest} when is_number(W) -> {W, Rest};
         false -> {0.0, InputIdps}
     end.
@@ -402,22 +407,28 @@ link_neurons(State, Agent) ->
                 || {InputId, Weights} <- RealInputIdps
             ]),
 
-            %% Convert output IDs to PIDs
+            %% Partition outputs into feedforward and recurrent by layer (see
+            %% constructor:link_neurons/2). A target at the same or lower layer
+            %% is a feedback edge; the stored ro_ids is not trusted because
+            %% mutations do not maintain it. The sets are disjoint.
+            NeuronLayer = layer_of(Neuron#neuron.id),
+            {FeedforwardIds, RecurrentIds} = lists:partition(
+                fun(Id) -> layer_of(Id) > NeuronLayer end,
+                Neuron#neuron.output_ids
+            ),
             OutputPids = [
                 begin
-                    [{OutputId, OutputPid}] = ets:lookup(IdMap, OutputId),
-                    OutputPid
+                    [{FfId, FfPid}] = ets:lookup(IdMap, FfId),
+                    FfPid
                 end
-                || OutputId <- Neuron#neuron.output_ids
+                || FfId <- FeedforwardIds
             ],
-
-            %% Convert recurrent output IDs to PIDs
             ROPids = [
                 begin
                     [{ROId, ROPid}] = ets:lookup(IdMap, ROId),
                     ROPid
                 end
-                || ROId <- Neuron#neuron.ro_ids
+                || ROId <- RecurrentIds
             ],
 
             %% Send link messages to neuron
@@ -429,6 +440,10 @@ link_neurons(State, Agent) ->
         end,
         Cortex#cortex.neuron_ids
     ).
+
+%% @private Layer coordinate of an id {{Layer, Unique}, Type}.
+-spec layer_of(term()) -> number().
+layer_of({{Layer, _Unique}, _Type}) when is_number(Layer) -> Layer.
 
 %% @private Link actuators to their input neurons.
 -spec link_actuators(#exoself_state{}, #agent{}, pid()) -> ok.

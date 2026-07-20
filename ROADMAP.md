@@ -35,10 +35,18 @@ Still open under this heading:
   velocity); `pb_1_with_velocity` solves through the DXNN path (insight 015).
   `fx_sim` (Ch 19), `flatland` (Ch 18) and `snake_duel` remain, referenced by
   their morphologies.
-- Recurrent networks are not supported: a recurrent neuron waits on a feedback
-  input that nothing produces on the first cycle. Only feedforward works. This
-  is the prerequisite for the WITHOUT-velocity pole variants (non-Markov, need
-  memory) and for any LTC/CfC comparison.
+- Recurrent networks are supported. A recurrent (feedback) edge's source seeds
+  its target with a default [0.0] at link time (faithful to DXNN2 neuron:prep/1),
+  so the target does not deadlock on the first cycle; from cycle 1 the real
+  feedback flows. Recurrence is derived at phenotype-build time by partitioning
+  each neuron's outputs by layer (constructor and exoself), so it is robust to
+  mutations that do not maintain the stale ro_ids cache. Proven in
+  recurrent_neuron_tests (a self-recurrent neuron carries state across cycles)
+  and recurrent_evolution_tests. This unblocks the WITHOUT-velocity pole variants
+  (non-Markov, need memory) and the LTC/CfC comparison. Deferred: a flush/reseed
+  handshake between memetic tuning attempts (attempts 2+ currently start from the
+  previous attempt's final recurrent state rather than a fresh [0.0]; harmless,
+  non-deadlocking, but not yet a clean reset).
 - Multi-generation evolution works and solves XOR and pole; see 2b, 2c and
   insight 015.
 
