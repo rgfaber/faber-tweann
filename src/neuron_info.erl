@@ -77,16 +77,19 @@ get_neuron_info(#neuron{} = N) ->
     };
 
 get_neuron_info(Pid) when is_pid(Pid) ->
-    %% Query the running neuron process for its state
-    case catch gen_server:call(Pid, get_state, 5000) of
+    %% Query the running neuron process for its state. A dead or unresponsive
+    %% process makes gen_server:call raise an exit, caught below (this replaced
+    %% the `catch Expr' prefix form, deprecated in OTP 29).
+    try gen_server:call(Pid, get_state, 5000) of
         {ok, State} when is_map(State) ->
             maps:merge(
                 #{capabilities => get_capabilities(maps:get(neuron_type, State, standard))},
                 State
             );
         #neuron{} = N ->
-            get_neuron_info(N);
-        {'EXIT', _} ->
+            get_neuron_info(N)
+    catch
+        _:_ ->
             #{
                 neuron_type => unknown,
                 time_constant => 0.0,

@@ -13,9 +13,10 @@ setup() ->
     ok.
 
 teardown() ->
-    %% Unregister any morphologies registered during tests
-    catch morphology_registry:unregister(test_morphology),
-    catch morphology_registry:unregister(incomplete_morphology),
+    %% Unregister any morphologies registered during tests, ignoring errors
+    %% (OTP 29 deprecated the `catch Expr' prefix form).
+    _ = try morphology_registry:unregister(test_morphology) catch _:_ -> ok end,
+    _ = try morphology_registry:unregister(incomplete_morphology) catch _:_ -> ok end,
     ok.
 
 %% ============================================================================
