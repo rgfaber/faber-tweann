@@ -26,8 +26,10 @@ Evolutionary neural networks that evolve both topology and weights, now with **L
 
 %% Create and evolve a standard network
 genotype:init_db(),
+SpecieId = genotype:generate_id(specie),
+AgentId  = genotype:generate_id(agent),
 Constraint = #constraint{morphology = xor_mimic},
-{ok, AgentId} = genotype:construct_agent(Constraint),
+genotype:construct_Agent(SpecieId, AgentId, Constraint),
 genome_mutator:mutate(AgentId).
 
 %% Use LTC dynamics directly
