@@ -231,6 +231,11 @@ handle_start_evaluation(State) ->
 -spec handle_agent_termination(term(), [float()], non_neg_integer(), population_state()) ->
     {noreply, population_state()}.
 handle_agent_termination(AgentId, Fitness, EvalCount, State) ->
+    %% Persist the agent's fitness to its genotype record. Selection uses the
+    %% transient fitness_acc, but recording fitness on the agent lets post-hoc
+    %% analysis (and future genotype-driven selection) read it back after a run.
+    persist_agent_fitness(AgentId, Fitness),
+
     %% Remove from active processes
     UpdatedActive = lists:keydelete(AgentId, 1, State#population_state.active_agent_processes),
 
@@ -251,6 +256,16 @@ handle_agent_termination(AgentId, Fitness, EvalCount, State) ->
             handle_generation_complete(UpdatedState);
         _ ->
             {noreply, UpdatedState}
+    end.
+
+%% @private Write an agent's fitness onto its genotype record, if it still exists.
+-spec persist_agent_fitness(term(), term()) -> ok.
+persist_agent_fitness(AgentId, Fitness) ->
+    case genotype:dirty_read({agent, AgentId}) of
+        undefined -> ok;
+        Agent ->
+            _ = genotype:write(Agent#agent{fitness = Fitness}),
+            ok
     end.
 
 %% @private Handle generation completion - selection and reproduction
