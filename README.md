@@ -13,8 +13,8 @@ Evolutionary neural networks that evolve both topology and weights, now with **L
 
 - **First TWEANN library with LTC neurons** in Erlang/OTP
 - **CfC closed-form approximation** - ~100x faster than ODE-based LTC
-- **Rust NIF acceleration** - Optional 30-200x speedup for fitness statistics, novelty search, selection
-- **Pure Erlang fallback** - Works on any system without Rust toolchain
+- **Rust NIF acceleration** - Native implementations of fitness statistics, novelty search, selection and network evaluation (speedup not yet measured; see below)
+- **Pure Erlang reference implementation** - Selected explicitly, held in agreement with the native path by a conformance test
 - **Hybrid networks** - Mix standard and LTC neurons in the same network
 - **Production ready** - Comprehensive logging, error handling, and process safety
 
@@ -22,7 +22,7 @@ Evolutionary neural networks that evolve both topology and weights, now with **L
 
 ```erlang
 %% Add to rebar.config
-{deps, [{faber_tweann, "~> 1.0"}]}.
+{deps, [{faber_tweann, "~> 2.0"}]}.
 
 %% Create and evolve a standard network
 genotype:init_db(),
@@ -80,7 +80,7 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
 - **Process Safety**: Timeouts and crash handling
 - **Comprehensive Logging**: Structured logging throughout
 - **Rust NIF (optional)**: High-performance network evaluation
-- **Mnesia Storage**: Persistent genotype storage
+- **ETS Storage**: Fast in-memory genotype storage (see ROADMAP.md for planned Mnesia persistence)
 
 ## Native Acceleration
 
@@ -122,7 +122,7 @@ Process-based neural networks with evolutionary operators. See [Architecture Gui
 ## Testing
 
 ```bash
-rebar3 eunit          # Unit tests (858 tests)
+rebar3 eunit          # Unit tests (971 tests)
 rebar3 dialyzer       # Static analysis
 rebar3 ex_doc         # Generate documentation
 ```

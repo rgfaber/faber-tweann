@@ -21,14 +21,14 @@ rebar3 hex publish     # Publish to hex.pm
 
 ### Core Modules
 
-- **genotype.erl** - Genotype construction and Mnesia persistence
+- **genotype.erl** - Genotype construction and ETS storage
 - **constructor.erl** - Phenotype construction from genotypes
 - **morphology.erl** - Sensor/actuator specifications per problem domain
 - **records.hrl** - Record definitions (#agent, #cortex, #sensor, #actuator, #neuron)
 
 ### Data Storage
 
-- Uses **Mnesia** for persistent genotype storage
+- Uses **ETS** for in-memory genotype storage (Mnesia persistence is on the roadmap, not implemented)
 - Uses **Erlang records** (not maps) for all data structures
 - ID format: `{{LayerCoord, UniqueFloat}, Type}`
 - Weight format: `{Weight, DeltaWeight, LearningRate, ParameterList}`
