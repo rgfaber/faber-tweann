@@ -63,20 +63,11 @@ Until this lands, faber-tweann is a topology-and-weight evolver but not DXNN.
 **Status:** fixed (insight 011). Evolution runs 150+ generations, fitness
 climbs monotonically. What remains is search quality, item 2c.
 
-A single evaluation runs end to end (insight 009) and the population_monitor
-drives one full generation of Sher-path evaluations. Multi-generation
-evolution crashes: exoself:link_neurons hits a badmatch (a neuron references an
-id absent from the process map) and neurons time out on missing inputs.
-
-Bisected by data-only integrity probes: fresh construction is clean, a single
-clone+mutation is clean, only the repeated clone/mutate/delete lifecycle
-breaks. The fault is in the interaction of reproduce_population (clone
-survivors) with cleanup_agents (delete non-survivors), or in mutation
-operators adding connections the feedforward evaluator cannot order.
-
-Until this is fixed, evolution cannot solve XOR through this path, and the
-comparison against the domain_sdk control (insight 004, median 550
-evaluations) cannot be made.
+Five coupled bugs, all found by bisecting from a running population: spliced
+neurons all landing on layer 0; link mutations ignoring feedforward direction;
+`add_bias` crashing `link_neurons` (bias resolved as a pid); a crashing agent
+cascading through `spawn_link` to kill the run; and the memetic weight tuner
+being entirely dead (neurons ignored `perturb`/`backup`/`restore`). All fixed.
 
 
 ## 2c. Topology-search quality (actually solve XOR)
