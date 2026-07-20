@@ -189,5 +189,10 @@ create_test_state(Overrides) ->
      maps:get(species_map, Merged),
      maps:get(timestamp_started, Merged),
      maps:get(survival_rate, Merged),
+     %% solved and notify_pid were added to #population_state{} for
+     %% goal-based termination and completion notification. This positional
+     %% tuple must track the record field order.
+     maps:get(solved, Merged, false),
+     maps:get(notify_pid, Merged, undefined),
      maps:get(fitness_acc, Merged)
     }.

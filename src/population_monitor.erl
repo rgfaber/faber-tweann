@@ -79,6 +79,12 @@
     species_map = #{} :: #{term() => [term()]},
     timestamp_started :: erlang:timestamp(),
     survival_rate :: float(),
+    %% Set true when any agent reports goal_reached (task solved). Distinct
+    %% from a fitness threshold: it is the scape's own verdict.
+    solved = false :: boolean(),
+    %% Optional process notified with {population_complete, Info} when the run
+    %% ends, so a caller can observe reason and result without racing the stop.
+    notify_pid :: pid() | undefined,
     fitness_acc = [] :: [{term(), [float()]}]
 }).
 
@@ -131,6 +137,7 @@ init(Config) ->
         evolutionary_strategy = maps:get(evolutionary_strategy, Config, generational),
         specie_size_limit = maps:get(specie_size_limit, Config, 10),
         survival_rate = maps:get(survival_rate, Config, 0.5),
+        notify_pid = maps:get(notify_pid, Config, undefined),
         timestamp_started = erlang:timestamp()
     },
     {ok, State}.
@@ -161,6 +168,10 @@ handle_cast(_Msg, State) ->
 
 %% @doc Handle info messages.
 -spec handle_info(term(), population_state()) -> {noreply, population_state()}.
+handle_info({_ExoselfPid, goal_reached, _AgentId}, State) ->
+    %% An agent's scape reported the task solved. Latch it; the generation
+    %% will finish and should_terminate/1 will stop the run.
+    {noreply, State#population_state{solved = true}};
 handle_info(Info, State) ->
     tweann_logger:warning("PopMon ~p received unexpected info: ~p",
                          [State#population_state.population_id, Info]),
@@ -182,9 +193,11 @@ handle_start_evaluation(State) ->
     %% Check termination conditions before starting new generation
     case should_terminate(State) of
         true ->
-            io:format("Evolution complete: Cohort ~p, Best Fitness: ~p~n",
-                      [State#population_state.generation_count,
+            Reason = completion_reason(State),
+            io:format("Evolution complete (~p): Cohort ~p, Best Fitness: ~p~n",
+                      [Reason, State#population_state.generation_count,
                        State#population_state.current_best_fitness]),
+            notify_complete(State, Reason),
             {stop, normal, State};
         false ->
             %% Spawn all agents for evaluation
@@ -320,16 +333,25 @@ spawn_agent(AgentId, State) ->
             OpMode
         ),
 
-        %% Wait for agent to complete (5s timeout to prevent hanging agents)
+        %% Wait for the agent to complete.
+        %%
+        %% The scape drives a memetic tuning loop (up to 15 weight-perturbation
+        %% attempts per evaluation), so a single agent can take a while; 5s was
+        %% too tight and produced spurious [0.0] fitnesses. 30s is comfortable.
         receive
             {exoself_terminated, Fitness} ->
-                population_monitor:agent_terminated(MonitorPid, AgentId, Fitness)
-        after 5000 ->
-            %% Timeout - use default fitness and log warning
-            tweann_logger:warning("Agent ~p evaluation timeout after 5s", [AgentId]),
+                population_monitor:agent_terminated(MonitorPid, AgentId,
+                                                    ensure_fitness_list(Fitness))
+        after 30000 ->
+            tweann_logger:warning("Agent ~p evaluation timeout after 30s", [AgentId]),
             population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
         end
     end).
+
+%% @private The population monitor works in vector fitness ([float()]); the
+%% exoself reports a scalar. Normalise so lists:sum and friends do not crash.
+ensure_fitness_list(F) when is_number(F) -> [F];
+ensure_fitness_list(L) when is_list(L) -> L.
 
 %% ============================================================================
 %% Selection and Reproduction
@@ -406,7 +428,9 @@ reproduce_population(Survivors, TotalAgents) ->
 %% @returns true if should terminate, false otherwise
 -spec should_terminate(population_state()) -> boolean().
 should_terminate(State) ->
-    goal_reached(State) orelse max_generations_reached(State).
+    State#population_state.solved
+        orelse goal_reached(State)
+        orelse max_generations_reached(State).
 
 %% @private Check if fitness goal reached
 -spec goal_reached(population_state()) -> boolean().
@@ -416,6 +440,31 @@ goal_reached(State) ->
         BestFitness ->
             GoalFitness = State#population_state.fitness_goal,
             lists:sum(BestFitness) >= lists:sum(GoalFitness)
+    end.
+
+%% @private Why the run ended.
+completion_reason(State) ->
+    case State#population_state.solved of
+        true -> solved;
+        false ->
+            case goal_reached(State) of
+                true -> fitness_goal;
+                false -> max_generations
+            end
+    end.
+
+%% @private Tell the configured observer the run is over.
+notify_complete(State, Reason) ->
+    case State#population_state.notify_pid of
+        undefined ->
+            ok;
+        Pid ->
+            Pid ! {population_complete, #{
+                reason => Reason,
+                generation => State#population_state.generation_count,
+                best_fitness => State#population_state.current_best_fitness
+            }},
+            ok
     end.
 
 %% @private Check if max generations reached

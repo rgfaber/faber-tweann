@@ -17,32 +17,26 @@ reference implementation for the DXNN2 architecture this package ports. See
 
 ---
 
-## 1. The scape and the fitness channel (Handbook Ch 7)
+## 1. The scape and the fitness channel (Handbook Ch 7) — DONE
 
-**Status:** not implemented. Blocks everything else.
+**Status:** implemented (insights 008, 009). `xor_sim` only; other scapes and
+recurrent networks remain.
 
-`morphology_*.erl` in `examples/` declare `scape = {private, xor_sim}`,
-`{private, pb_sim}`, `{private, fx_sim}`, `{public, flatland}` and
-`{public, snake_duel}`. None of those five modules exist. There is no `scape`
-module at all; Sher's scape concept survives only as an unused field on
-`#sensor{}` and `#actuator{}`.
+`scape.erl` and `xor_sim.erl` exist. The fitness channel runs end to end:
+scape → actuator → cortex → exoself, with `goal_reached` propagation. The
+exoself spawns scapes, sends `{exoself_terminated, Fitness}`, and terminates.
+A single agent runs to completion through the process-per-neuron path and
+produces real fitness (insight 009), and the population_monitor drives a full
+generation of such evaluations (insight 010).
 
-Consequence: no fitness value can reach the evolutionary loop. `sensor.erl`
-returns zeros for unrecognised sensor names, `actuator.erl` passes its input
-through, `cortex.erl` contains no reference to fitness, and
-`exoself.erl:412-416` computes fitness as `lists:sum(Outputs)`. Nothing sends
-the `{exoself_terminated, Fitness}` that `population_monitor.erl:315-332` waits
-for, so every agent times out after 5 seconds with fitness `[0.0]`.
+Still open under this heading:
+- Only `xor_sim` exists. `pb_sim` (Handbook Ch 14), `fx_sim` (Ch 19), `flatland`
+  (Ch 18) and `snake_duel` remain, referenced by their morphologies.
+- Recurrent networks are not supported: a recurrent neuron waits on a feedback
+  input that nothing produces on the first cycle. Only feedforward works.
+- Multi-generation evolution is blocked; see 2b.
 
-**No end-to-end evolutionary run has ever completed in this codebase.**
-
-Required: `scape.erl` (`gen/2`, `prep/1`, name dispatch), `xor_sim`, scape
-spawning in `exoself` (or adopt `constructor.erl`, which already wires
-`scape_pid` correctly and has zero callers), the fitness message path
-scape → actuator → cortex → exoself, and `goal_reached` propagation.
-
-The exact message protocol is specified in
-`faber-ecosystem/docs/PROTOCOL.md`.
+The message protocol is specified in `faber-ecosystem/docs/PROTOCOL.md`.
 
 ## 2. The memetic tuning layer (Handbook Ch 10)
 
@@ -63,6 +57,25 @@ drive it, and none exist here:
 `exoself.erl:69` hardcodes `max_attempts = 15` where DXNN2 computes it.
 
 Until this lands, faber-tweann is a topology-and-weight evolver but not DXNN.
+
+## 2b. Genotype lifecycle integrity across generations
+
+**Status:** blocks evolution through the process-per-neuron path (insight 010).
+
+A single evaluation runs end to end (insight 009) and the population_monitor
+drives one full generation of Sher-path evaluations. Multi-generation
+evolution crashes: exoself:link_neurons hits a badmatch (a neuron references an
+id absent from the process map) and neurons time out on missing inputs.
+
+Bisected by data-only integrity probes: fresh construction is clean, a single
+clone+mutation is clean, only the repeated clone/mutate/delete lifecycle
+breaks. The fault is in the interaction of reproduce_population (clone
+survivors) with cleanup_agents (delete non-survivors), or in mutation
+operators adding connections the feedforward evaluator cannot order.
+
+Until this is fixed, evolution cannot solve XOR through this path, and the
+comparison against the domain_sdk control (insight 004, median 550
+evaluations) cannot be made.
 
 ## 3. Mnesia genotype storage (Handbook Ch 8.4.1)
 
