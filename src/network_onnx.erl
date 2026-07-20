@@ -92,18 +92,15 @@ build_model(Network, Opts) ->
         graph => GraphProto
     }).
 
-%% @private Extract network data
-get_network_data(Network) when is_tuple(Network) ->
-    %% Record: #network{layers, activation, output_activation, compiled_ref}
-    %% Handle old and new record formats
-    case Network of
-        {network, Layers, Activation, _OutputActivation, _CompiledRef} ->
-            {Layers, Activation};
-        {network, Layers, Activation, _CompiledRef} ->
-            {Layers, Activation};
-        {network, Layers, Activation} ->
-            {Layers, Activation}
-    end;
+%% @private Extract network data.
+%%
+%% Uses network_evaluator accessors rather than destructuring the network
+%% tuple. The previous implementation matched on fixed tuple arities, which
+%% silently broke when neuron_meta and internal_state were added to the
+%% network record for CfC/LTC support: every export began returning
+%% {error, {onnx_export_failed, function_clause, _}}.
+get_network_data(Network) when is_tuple(Network), element(1, Network) =:= network ->
+    {network_evaluator:get_layers(Network), network_evaluator:get_activation(Network)};
 get_network_data(#{layers := Layers, activation := Activation}) ->
     {Layers, Activation}.
 

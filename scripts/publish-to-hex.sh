@@ -15,13 +15,15 @@ echo "==> Building faber_tweann..."
 rebar3 compile
 
 echo "==> Running tests..."
-# eunit returns non-zero when optional NIF tests fail (network_onnx_tests).
-# These require faber_nn_nifs which isn't available in all environments.
-# We run tests for visibility but don't block publishing on NIF failures.
-rebar3 eunit || {
-    echo "==> WARNING: Some tests failed (expected if faber_nn_nifs is not available)"
-    echo "==> Continuing with publish..."
-}
+# Tests must pass. Do not add tolerance here.
+#
+# History: this block previously swallowed failures, attributing them to
+# "optional NIF tests" requiring faber_nn_nifs. That explanation was wrong.
+# The 20 failures were in network_onnx_tests and had no NIF involvement: the
+# #network{} record gained neuron_meta and internal_state for CfC/LTC support,
+# and network_onnx matched it as a fixed-arity tuple. Suppressing the failure
+# let a broken export path ship to hex in v1.2.0.
+rebar3 eunit
 
 echo "==> Building docs..."
 rebar3 ex_doc

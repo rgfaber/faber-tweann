@@ -33,6 +33,9 @@
     get_topology/1,
     get_viz_data/3,
     reset_internal_state/1,
+    get_layers/1,
+    get_activation/1,
+    get_output_activation/1,
     get_neuron_meta/1,
     set_neuron_meta/2,
     %% Memory management
@@ -165,6 +168,30 @@ reset_internal_state(#network{internal_state = undefined} = Net) ->
 reset_internal_state(#network{internal_state = State} = Net) ->
     ZeroState = [lists:duplicate(length(S), 0.0) || S <- State],
     Net#network{internal_state = ZeroState}.
+
+%% @doc Get the layer list from a network.
+%%
+%% Accessor for consumers outside this module. Use this rather than
+%% destructuring the network tuple directly, so that adding fields to the
+%% network record cannot silently break callers.
+-spec get_layers(network()) -> [layer()].
+get_layers(#network{layers = Layers}) ->
+    Layers.
+
+%% @doc Get the hidden layer activation function from a network.
+%%
+%% See get_layers/1 for why callers outside this module should use accessors.
+-spec get_activation(network()) -> atom().
+get_activation(#network{activation = Activation}) ->
+    Activation.
+
+%% @doc Get the output layer activation function from a network.
+%%
+%% Returns undefined when the output layer uses the same activation as the
+%% hidden layers.
+-spec get_output_activation(network()) -> atom() | undefined.
+get_output_activation(#network{output_activation = OutputActivation}) ->
+    OutputActivation.
 
 %% @doc Get neuron metadata from a CfC network.
 %%

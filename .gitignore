@@ -18,3 +18,7 @@ _checkouts/
 Mnesia.*/
 doc/
 rebar3.crashdump
+
+# Lockfiles are not committed: loose constraints must stay loose so
+# coordinated library updates are not blocked by a stale pin.
+rebar.lock
