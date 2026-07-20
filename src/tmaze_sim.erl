@@ -32,21 +32,27 @@
 -export([init/1, sense/3, act/4]).
 
 -define(DEFAULT_DELAY, 2).
--define(DEFAULT_TRIALS, 20).
-%% Solved when at least this fraction of trials are correct.
+%% 100 trials, exactly balanced (50 left / 50 right) and shuffled, so a
+%% MEMORYLESS "always turn one way" policy scores exactly 50 with ZERO variance
+%% -- it cannot luck into a solve. With 20 random-cue trials it could (a skewed
+%% draw let an always-one-way net hit 18/20; EXP_021 v1).
+-define(DEFAULT_TRIALS, 100).
+%% Solved when at least this fraction of trials are correct (90/100). Well above
+%% the 50/100 memoryless ceiling, so only genuine cue-memory reaches it.
 -define(SOLVE_RATIO, 0.9).
 
 -record(state, {
     delay = ?DEFAULT_DELAY :: non_neg_integer(),
     trials = ?DEFAULT_TRIALS :: pos_integer(),
-    trial_index = 0 :: non_neg_integer(),
+    cues = [] :: [float()],
     step = 0 :: non_neg_integer(),
     cue = 1.0 :: float(),
     correct = 0 :: non_neg_integer()
 }).
 
 init(_Params) ->
-    #state{cue = draw_cue()}.
+    [First | Rest] = balanced_cues(?DEFAULT_TRIALS),
+    #state{trials = ?DEFAULT_TRIALS, cue = First, cues = Rest}.
 
 %% Sense: cue at step 0, junction flag at the decision step, nothing in between.
 sense(_SensorName, Params, S) ->
@@ -69,15 +75,15 @@ act_step(true, _Output, S) ->
 act_step(false, Output, S) ->
     Reward = reward(same_sign(Output, S#state.cue)),
     NewCorrect = S#state.correct + round(Reward),
-    NewIndex = S#state.trial_index + 1,
-    finish_or_continue(NewIndex >= S#state.trials, Reward, NewCorrect, NewIndex, S).
+    next_trial(S#state.cues, Reward, NewCorrect, S).
 
-finish_or_continue(true, Reward, NewCorrect, NewIndex, S) ->
+%% No cues left: the episode is over. Solved if enough decisions were correct.
+next_trial([], Reward, NewCorrect, S) ->
     Halt = solved_flag(NewCorrect >= round(S#state.trials * ?SOLVE_RATIO)),
-    {Reward, Halt, S#state{correct = NewCorrect, trial_index = NewIndex}};
-finish_or_continue(false, Reward, NewCorrect, NewIndex, S) ->
-    {Reward, 0, S#state{step = 0, cue = draw_cue(),
-                        trial_index = NewIndex, correct = NewCorrect}}.
+    {Reward, Halt, S#state{correct = NewCorrect}};
+%% Otherwise start the next trial with the next cue from the balanced sequence.
+next_trial([NextCue | Rest], Reward, NewCorrect, S) ->
+    {Reward, 0, S#state{step = 0, cue = NextCue, cues = Rest, correct = NewCorrect}}.
 
 %%%============================================================================
 %%% Internal
@@ -91,11 +97,15 @@ solved_flag(false) -> 1.
 
 same_sign(A, B) -> (A >= 0) =:= (B >= 0).
 
-draw_cue() ->
-    case rand:uniform(2) of
-        1 -> 1.0;
-        2 -> -1.0
-    end.
+%% A balanced list of N cues (half +1, half -1), shuffled. Balance removes all
+%% luck from the memoryless baseline: always turning one way scores exactly N/2.
+balanced_cues(N) ->
+    Half = N div 2,
+    List = lists:duplicate(Half, 1.0) ++ lists:duplicate(N - Half, -1.0),
+    shuffle(List).
+
+shuffle(List) ->
+    [X || {_K, X} <- lists:sort([{rand:uniform(), E} || E <- List])].
 
 delay([D | _], _S) when is_integer(D) -> D;
 delay(_Params, S) -> S#state.delay.
