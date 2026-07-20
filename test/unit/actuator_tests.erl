@@ -54,7 +54,7 @@ single_input_forward_test() ->
     ActuatorPid ! {forward, Sender, [0.5]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([0.5], Output)
     after 1000 ->
         ?assert(false)
@@ -87,7 +87,7 @@ multiple_inputs_forward_test() ->
     ActuatorPid ! {forward, Sender2, [2.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0], Output)
     after 1000 ->
         ?assert(false)
@@ -110,7 +110,7 @@ vector_input_test() ->
     ActuatorPid ! {forward, Sender, [1.0, 2.0, 3.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0, 3.0], Output)
     after 1000 ->
         ?assert(false)
@@ -136,7 +136,7 @@ actuator_pts_test() ->
     ActuatorPid ! {forward, Sender, [3.14]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([3.14], Output)
     after 1000 ->
         ?assert(false)
@@ -158,7 +158,7 @@ actuator_identity_test() ->
     ActuatorPid ! {forward, Sender, [1.0, 2.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0], Output)
     after 1000 ->
         ?assert(false)
@@ -181,7 +181,7 @@ actuator_threshold_test() ->
     ActuatorPid ! {forward, Sender, [0.3, 0.7, 0.5]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([0.0, 1.0, 0.0], Output)
     after 1000 ->
         ?assert(false)
@@ -203,7 +203,7 @@ actuator_softmax_test() ->
     ActuatorPid ! {forward, Sender, [1.0, 2.0, 3.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             %% Should sum to 1.0
             Sum = lists:sum(Output),
             ?assert(abs(Sum - 1.0) < 0.0001),
@@ -231,7 +231,7 @@ actuator_argmax_test() ->
     ActuatorPid ! {forward, Sender, [0.1, 0.9, 0.5]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([1.0], Output)  % Index 1 has max value
     after 1000 ->
         ?assert(false)
@@ -253,7 +253,7 @@ actuator_unknown_passthrough_test() ->
     ActuatorPid ! {forward, Sender, [1.0, 2.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
+        {actuator_output, ActuatorPid, Output, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0], Output)
     after 1000 ->
         ?assert(false)
@@ -279,7 +279,7 @@ multiple_forward_cycles_test() ->
     lists:foreach(fun(I) ->
         ActuatorPid ! {forward, Sender, [float(I)]},
         receive
-            {actuator_output, ActuatorPid, [V]} ->
+            {actuator_output, ActuatorPid, [V], _Fitness, _Halt} ->
                 ?assertEqual(float(I), V)
         after 1000 ->
             ?assert(false)
@@ -293,15 +293,21 @@ multiple_forward_cycles_test() ->
 %% Scape Tests
 %% =============================================================================
 
+%% The scape supplies FITNESS, it does not rewrite the actuator's output.
+%%
+%% This test previously had the mock scape return {self(), result, Transformed}
+%% and asserted the actuator's output had been changed by the scape. That was
+%% faber's own invention: in DXNN2 the scape consumes the output and answers
+%% {ScapePid, Fitness, HaltFlag}, and the output passes through untouched.
+%% See faber-ecosystem/docs/PROTOCOL.md.
 scape_actuate_test() ->
     Sender = spawn(fun() -> receive _ -> ok end end),
 
-    %% Create mock scape
     Scape = spawn(fun() ->
         receive
-            {From, actuate, Input, _Params} ->
-                %% Return modified result
-                From ! {self(), result, [hd(Input) * 2]}
+            {From, action, _ActuatorName, _Params, Output} ->
+                %% Fitness proportional to the output, plain halt.
+                From ! {self(), hd(Output) * 2, 1}
         end
     end),
 
@@ -316,8 +322,12 @@ scape_actuate_test() ->
     ActuatorPid ! {forward, Sender, [5.0]},
 
     receive
-        {actuator_output, ActuatorPid, Output} ->
-            ?assertEqual([10.0], Output)
+        {actuator_output, ActuatorPid, Output, Fitness, Halt} ->
+            %% Output passes through unchanged; the scape's contribution is
+            %% the fitness value and the halt flag.
+            ?assertEqual([5.0], Output),
+            ?assertEqual(10.0, Fitness),
+            ?assertEqual(1, Halt)
     after 1000 ->
         ?assert(false)
     end,

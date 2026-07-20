@@ -247,7 +247,8 @@ scape_request_test() ->
     Scape = spawn(fun() ->
         receive
             {From, sense, _SensorName, _Params} ->
-                From ! {self(), sensory_signal, [1.0, 2.0, 3.0]}
+                %% DXNN2 wire format: the reply is tagged `percept'.
+                From ! {self(), percept, [1.0, 2.0, 3.0]}
         end
     end),
 

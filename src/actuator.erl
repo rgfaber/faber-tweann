@@ -174,8 +174,20 @@ process_and_report(State) ->
     %% Build input vector in correct order
     Input = build_input(FaninPids, AccInput),
 
-    %% Process through actuator function
-    Output = actuate(ActuatorName, Input, ScapePid, Parameters),
+    %% Process through actuator function.
+    %%
+    %% When a scape is attached it is the source of fitness, so the call
+    %% returns {Fitness, HaltFlag, Output} rather than an output alone. This
+    %% is the fitness channel: before it existed, nothing carried a fitness
+    %% value from the environment back to the evolutionary loop, and exoself
+    %% invented one by summing the network's own outputs.
+    {Fitness, HaltFlag, Output} =
+        case ScapePid of
+            undefined ->
+                {0.0, 0, actuate(ActuatorName, Input, undefined, Parameters)};
+            _ ->
+                act_on_scape(ActuatorName, Input, ScapePid, Parameters)
+        end,
 
     case EventDriven of
         true ->
@@ -183,11 +195,13 @@ process_and_report(State) ->
             network_pubsub:publish(NetworkId, actuator_output_ready, #{
                 from => self(),
                 actuator_id => Id,
-                output => Output
+                output => Output,
+                fitness => Fitness,
+                halt_flag => HaltFlag
             });
         false ->
-            %% Legacy: direct message to cortex
-            CortexPid ! {actuator_output, self(), Output}
+            %% Direct message to cortex, extended with the fitness channel.
+            CortexPid ! {actuator_output, self(), Output, Fitness, HaltFlag}
     end,
 
     %% Reset accumulated inputs
@@ -233,20 +247,34 @@ actuate(argmax, Input, _ScapePid, _Parameters) ->
     [float(Index)];
 
 actuate(scape, Input, ScapePid, Parameters) ->
-    %% Send to scape for evaluation
+    %% Superseded by act_on_scape/4, which returns fitness. Retained only for
+    %% callers that predate the fitness channel.
     case ScapePid of
         undefined ->
             Input;
         _ ->
-            ScapePid ! {self(), actuate, Input, Parameters},
-            receive
-                {ScapePid, result, Result} ->
-                    Result
-            after 5000 ->
-                Input
-            end
+            {_Fitness, _Halt, Output} =
+                act_on_scape(scape, Input, ScapePid, Parameters),
+            Output
     end;
 
 actuate(_ActuatorName, Input, _ScapePid, _Parameters) ->
     %% Default: pass through
     Input.
+
+%% @private
+%% @doc Send the output to the scape and receive fitness back.
+%%
+%% DXNN2 wire format: {ActuatorPid, action, Name, Params, Output} out,
+%% {ScapePid, Fitness, HaltFlag} back. HaltFlag is 0 to continue, 1 to end the
+%% evaluation, or `goal_reached' when the scape judges the task solved.
+%% goal_reached must propagate intact: it is what lets the population monitor
+%% freeze total_evaluations at the moment of solution.
+act_on_scape(ActuatorName, Input, ScapePid, Parameters) ->
+    ScapePid ! {self(), action, ActuatorName, Parameters, Input},
+    receive
+        {ScapePid, Fitness, HaltFlag} ->
+            {Fitness, HaltFlag, Input}
+    after 5000 ->
+        erlang:error({scape_action_timeout, ScapePid, ActuatorName})
+    end.

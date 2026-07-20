@@ -34,7 +34,7 @@
 -dialyzer({nowarn_function, [
     initialize_base_state/4,
     loop/1,
-    handle_evaluation_complete/2,
+    handle_evaluation_complete/3,
     terminate_network/1
 ]}).
 
@@ -166,6 +166,19 @@ initialize_base_state(Agent, PopMonitorPid, OpMode, IdToProcessMap) ->
     }.
 
 %% @private Spawn all sensor processes.
+%% @private
+%% @doc Forward goal_reached to the population monitor.
+%%
+%% This is what makes evaluations-to-solve measurable: without it the counter
+%% never freezes at the moment of solution and no comparison against published
+%% figures is possible. Handbook Ch 14.
+maybe_report_goal_reached(goal_reached, #exoself_state{population_monitor_pid = Pid, agent_id = AgentId})
+  when is_pid(Pid) ->
+    Pid ! {self(), goal_reached, AgentId},
+    ok;
+maybe_report_goal_reached(_HaltFlag, _State) ->
+    ok.
+
 -spec spawn_sensors(#exoself_state{}, #agent{}) -> {[pid()], [term()]}.
 spawn_sensors(State, Agent) ->
     #exoself_state{id_to_process_map = IdMap} = State,
@@ -362,8 +375,14 @@ loop(State) ->
     } = State,
 
     receive
+        %% Fitness channel: the cortex now reports the scape's accumulated
+        %% fitness and halt flag alongside the outputs.
+        {cortex, _CxId, evaluation_complete, _Outputs, Fitness, HaltFlag} ->
+            handle_evaluation_complete(Fitness, HaltFlag, State);
+
+        %% No scape attached: outputs only, no fitness available.
         {cortex, _CxId, evaluation_complete, Fitness} ->
-            handle_evaluation_complete(Fitness, State);
+            handle_evaluation_complete(Fitness, 0, State);
 
         {cortex, _CxId, max_cycles_reached, _CycleCount} ->
             %% Evaluation complete, report to population monitor
@@ -399,8 +418,9 @@ loop(State) ->
     end.
 
 %% @private Handle evaluation completion.
--spec handle_evaluation_complete(number() | [number()], #exoself_state{}) -> ok.
-handle_evaluation_complete(Fitness, State) ->
+-spec handle_evaluation_complete(number() | [number()], term(), #exoself_state{}) -> ok.
+handle_evaluation_complete(Fitness, HaltFlag, State) ->
+    _ = maybe_report_goal_reached(HaltFlag, State),
     #exoself_state{
         cortex_pid = CortexPid,
         highest_fitness = HighestFitness,
@@ -409,7 +429,13 @@ handle_evaluation_complete(Fitness, State) ->
         evaluation_count = EvalCount
     } = State,
 
-    %% Calculate fitness value (may be list or single value)
+    %% Fitness now arrives from the scape via the cortex.
+    %%
+    %% This previously read `lists:sum(Fitness)' over the network's own OUTPUT
+    %% vector, because no scape existed to supply a fitness value and one had
+    %% to be invented. Hill-climbing on that rewards emitting large numbers,
+    %% not solving the task. A list is still summed for the no-scape case,
+    %% where the cortex passes outputs through.
     FitnessValue = case is_list(Fitness) of
         true -> lists:sum(Fitness);
         false -> Fitness

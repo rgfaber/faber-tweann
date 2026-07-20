@@ -41,6 +41,10 @@
     neuron_pids :: [pid()],
     actuator_pids :: [pid()],
     cycle_acc :: [float()],
+    %% Fitness channel accumulators. Fitness sums across actuators and cycles;
+    %% halt_flag latches the strongest signal seen (goal_reached > 1 > 0).
+    fitness_acc = 0.0 :: float(),
+    halt_flag = 0 :: 0 | 1 | goal_reached,
     expected_actuators :: non_neg_integer(),
     cycle_count :: non_neg_integer(),
     max_cycles :: non_neg_integer() | infinity,
@@ -137,13 +141,25 @@ loop(State) ->
             loop(NewState);
 
         %% Direct message (legacy/non-event-driven mode)
+        %% Fitness channel: the scape's fitness and halt flag ride along with
+        %% the actuator's output. Before this existed the cortex had no notion
+        %% of fitness at all and exoself invented one.
+        {actuator_output, _ActuatorPid, Output, Fitness, HaltFlag} ->
+            NewState = handle_actuator_output(Output, Fitness, HaltFlag, State),
+            loop(NewState);
+
+        %% Without a scape attached there is no fitness to carry.
         {actuator_output, _ActuatorPid, Output} ->
-            NewState = handle_actuator_output(Output, State),
+            NewState = handle_actuator_output(Output, 0.0, 0, State),
             loop(NewState);
 
         %% Event-driven: actuator output via pubsub
-        {network_event, actuator_output_ready, #{output := Output}} ->
-            NewState = handle_actuator_output(Output, State),
+        {network_event, actuator_output_ready, Ev} when is_map(Ev) ->
+            NewState = handle_actuator_output(
+                maps:get(output, Ev),
+                maps:get(fitness, Ev, 0.0),
+                maps:get(halt_flag, Ev, 0),
+                State),
             loop(NewState);
 
         backup ->
@@ -227,18 +243,28 @@ handle_sync(State) ->
         cycle_count = NewCycleCount
     }.
 
-handle_actuator_output(Output, State) ->
+handle_actuator_output(Output, Fitness, HaltFlag, State) ->
     #state{
         id = Id,
         exoself_pid = ExoselfPid,
         cycle_acc = CycleAcc,
+        fitness_acc = FitnessAcc,
+        halt_flag = HaltAcc,
         expected_actuators = ExpectedActuators,
         cycle_count = CycleCount,
         max_cycles = MaxCycles
     } = State,
 
-    %% Accumulate output
+    %% Accumulate output and fitness.
+    %%
+    %% Fitness sums across actuators and across cycles, as in DXNN2: a scape
+    %% using lifetime-based fitness returns 0.0 until it halts, so the sum is
+    %% the final value. A scape awarding per-step fitness accumulates.
     NewCycleAcc = [Output | CycleAcc],
+    NewFitnessAcc = FitnessAcc + Fitness,
+    %% goal_reached dominates a plain halt: any actuator reporting the task
+    %% solved must not be masked by another reporting an ordinary stop.
+    NewHalt = merge_halt(HaltAcc, HaltFlag),
     ReceivedCount = length(NewCycleAcc),
 
     %% Check if all actuators have reported
@@ -252,26 +278,41 @@ handle_actuator_output(Output, State) ->
                 undefined ->
                     ok;
                 _ ->
-                    ExoselfPid ! {cortex, Id, evaluation_complete, Outputs}
+                    %% Carries fitness and the halt flag. The old form sent
+                    %% outputs alone, which is why exoself had to invent a
+                    %% fitness value.
+                    ExoselfPid ! {cortex, Id, evaluation_complete,
+                                  Outputs, NewFitnessAcc, NewHalt}
             end,
 
             %% Check if max cycles reached
             case MaxCycles of
                 infinity ->
-                    State#state{cycle_acc = []};
+                    State#state{cycle_acc = [], fitness_acc = NewFitnessAcc, halt_flag = NewHalt};
                 N when CycleCount >= N ->
                     %% Max cycles reached - terminate
                     _ = case ExoselfPid of
                         undefined -> ok;
                         _ -> ExoselfPid ! {cortex, Id, max_cycles_reached, CycleCount}
                     end,
-                    State#state{cycle_acc = []};
+                    State#state{cycle_acc = [], fitness_acc = NewFitnessAcc, halt_flag = NewHalt};
                 _ ->
                     State#state{cycle_acc = []}
             end;
         false ->
-            State#state{cycle_acc = NewCycleAcc}
+            State#state{cycle_acc = NewCycleAcc,
+                        fitness_acc = NewFitnessAcc,
+                        halt_flag = NewHalt}
     end.
+
+%% @private
+%% @doc Combine halt flags across actuators. goal_reached wins over a plain
+%% halt, which wins over continue.
+merge_halt(goal_reached, _) -> goal_reached;
+merge_halt(_, goal_reached) -> goal_reached;
+merge_halt(1, _) -> 1;
+merge_halt(_, 1) -> 1;
+merge_halt(_, _) -> 0.
 
 handle_backup(State) ->
     #state{

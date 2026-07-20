@@ -163,13 +163,17 @@ handle_sync(State) ->
             sense(SensorName, VectorLength, Parameters);
         _ ->
             %% Request from scape
+            %% DXNN2 wire format: request {sense, Name, Params}, reply
+            %% tagged `percept'. See faber-ecosystem/docs/PROTOCOL.md.
             ScapePid ! {self(), sense, SensorName, Parameters},
             receive
-                {ScapePid, sensory_signal, SensorySignal} ->
-                    SensorySignal
+                {ScapePid, percept, SensoryVector} ->
+                    SensoryVector
             after 5000 ->
-                %% Timeout - return zeros
-                lists:duplicate(VectorLength, 0.0)
+                %% A scape that does not answer is a bug, not a condition to
+                %% absorb: zeros would feed the network silent garbage and
+                %% corrupt fitness without any signal.
+                erlang:error({scape_sense_timeout, ScapePid, SensorName})
             end
     end,
 

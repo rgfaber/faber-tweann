@@ -109,7 +109,7 @@ single_actuator_output_test() ->
     CortexPid2 ! {actuator_output, self(), [1.0, 2.0]},
 
     receive
-        {cortex, test_cortex, evaluation_complete, Outputs} ->
+        {cortex, test_cortex, evaluation_complete, Outputs, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0], Outputs)
     after 1000 ->
         ?assert(false)
@@ -133,7 +133,7 @@ multiple_actuator_outputs_test() ->
     CortexPid ! {actuator_output, Act1, [1.0]},
 
     receive
-        {cortex, test_cortex, evaluation_complete, _} ->
+        {cortex, test_cortex, evaluation_complete, _, _, _} ->
             ?assert(false)  % Should not receive yet
     after 100 ->
         ok
@@ -143,7 +143,7 @@ multiple_actuator_outputs_test() ->
     CortexPid ! {actuator_output, Act2, [2.0]},
 
     receive
-        {cortex, test_cortex, evaluation_complete, Outputs} ->
+        {cortex, test_cortex, evaluation_complete, Outputs, _Fitness, _Halt} ->
             ?assertEqual([1.0, 2.0], Outputs)
     after 1000 ->
         ?assert(false)
@@ -197,7 +197,7 @@ simple_network_cycle_test() ->
 
     %% Should receive evaluation complete
     receive
-        {cortex, test_cortex, evaluation_complete, Outputs} ->
+        {cortex, test_cortex, evaluation_complete, Outputs, _Fitness, _Halt} ->
             ?assertEqual([3.14], Outputs)
     after 1000 ->
         ?assert(false)
@@ -256,7 +256,7 @@ multiple_cycles_test() ->
     lists:foreach(fun(_) ->
         cortex:sync(CortexPid),
         receive
-            {cortex, test_cortex, evaluation_complete, [1.0]} -> ok
+            {cortex, test_cortex, evaluation_complete, [1.0], _F, _H} -> ok
         after 1000 ->
             ?assert(false)
         end
@@ -281,14 +281,14 @@ max_cycles_reached_test() ->
     %% First cycle
     cortex:sync(CortexPid),
     CortexPid ! {actuator_output, Act, [1.0]},
-    receive {cortex, test_cortex, evaluation_complete, _} -> ok after 1000 -> ?assert(false) end,
+    receive {cortex, test_cortex, evaluation_complete, _, _, _} -> ok after 1000 -> ?assert(false) end,
 
     %% Second cycle - should trigger max_cycles_reached
     cortex:sync(CortexPid),
     CortexPid ! {actuator_output, Act, [2.0]},
 
     %% Should receive both completion and max_cycles_reached
-    receive {cortex, test_cortex, evaluation_complete, _} -> ok after 1000 -> ?assert(false) end,
+    receive {cortex, test_cortex, evaluation_complete, _, _, _} -> ok after 1000 -> ?assert(false) end,
     receive {cortex, test_cortex, max_cycles_reached, 2} -> ok after 1000 -> ?assert(false) end,
 
     cortex:terminate(CortexPid),
