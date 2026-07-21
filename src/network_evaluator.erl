@@ -26,6 +26,7 @@
     create_cfc_feedforward/5,
     evaluate/2,
     evaluate_with_state/2,
+    evaluate_with_plasticity/3,
     evaluate_with_activations/2,
     from_genotype/1,
     get_weights/1,
@@ -157,6 +158,45 @@ evaluate_with_state(#network{layers = Layers, activation = Activation,
     OA = resolve_output_activation(OutputActivation, Activation),
     {Outputs, NewState} = forward_propagate_cfc(Layers, Inputs, Activation, OA, Meta, State, []),
     {Outputs, Net#network{internal_state = NewState}}.
+
+%% @doc Evaluate with online Hebbian plasticity (memory-by-learning).
+%%
+%% Forward pass, then update every weight by a global ABCD-Hebbian rule using the
+%% pre- and post-synaptic activations of each layer:
+%%   dW = Eta * (A*pre*post + B*pre + C*post + D), clamped to [-10, 10].
+%% The evolutionary search tunes the RULE {A,B,C,D,Eta}, not the weights, so the
+%% network adapts its own weights within an episode. Biases are not plastic.
+-spec evaluate_with_plasticity(network(), [float()],
+                               {float(), float(), float(), float(), float()}) ->
+    {[float()], network()}.
+evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
+                                  output_activation = OutputActivation} = Net, Inputs, Rule) ->
+    OA = resolve_output_activation(OutputActivation, Activation),
+    {Outputs, NewLayers} = forward_propagate_plastic(Layers, Inputs, Activation, OA, Rule),
+    {Outputs, Net#network{layers = NewLayers, compiled_ref = undefined}}.
+
+forward_propagate_plastic([{Weights, Biases}], Inputs, _Activation, OutputActivation, Rule) ->
+    {Outputs, NewLayer} = plastic_layer(Weights, Biases, Inputs, OutputActivation, Rule),
+    {Outputs, [NewLayer]};
+forward_propagate_plastic([{Weights, Biases} | RestLayers], Inputs, Activation, OA, Rule) ->
+    {Outputs, NewLayer} = plastic_layer(Weights, Biases, Inputs, Activation, Rule),
+    {FinalOutputs, NewRest} = forward_propagate_plastic(RestLayers, Outputs, Activation, OA, Rule),
+    {FinalOutputs, [NewLayer | NewRest]}.
+
+plastic_layer(Weights, Biases, Inputs, Activation, Rule) ->
+    Outputs = [apply_activation(dot_product(W, Inputs) + B, Activation)
+               || {W, B} <- lists:zip(Weights, Biases)],
+    NewWeights = [hebbian_neuron(W, Inputs, Out, Rule)
+                  || {W, Out} <- lists:zip(Weights, Outputs)],
+    {Outputs, {NewWeights, Biases}}.
+
+hebbian_neuron(W, Pre, Post, {A, B, C, D, Eta}) ->
+    [clamp_weight(Wi + Eta * (A * Pi * Post + B * Pi + C * Post + D))
+     || {Wi, Pi} <- lists:zip(W, Pre)].
+
+clamp_weight(X) when X < -10.0 -> -10.0;
+clamp_weight(X) when X > 10.0 -> 10.0;
+clamp_weight(X) -> X.
 
 %% @doc Reset internal state of a CfC network to zeros.
 %%
