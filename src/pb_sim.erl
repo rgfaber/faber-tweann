@@ -60,7 +60,22 @@
 %%% scape behaviour
 %%%============================================================================
 
-init(_Params) -> #state{}.
+%% init([]) starts from the standard benign state. A proplist of field overrides
+%% sets initial conditions (for generalisation testing over varied starting
+%% velocities/angles): [{p1_vel, V}, {p1_angle, A}, ...]. Unrecognised entries and
+%% non-list params fall through to the default, so existing callers are unchanged.
+init(Overrides) when is_list(Overrides) ->
+    lists:foldl(fun apply_override/2, #state{}, Overrides);
+init(_Params) ->
+    #state{}.
+
+apply_override({cpos, V}, S) -> S#state{cpos = V};
+apply_override({cvel, V}, S) -> S#state{cvel = V};
+apply_override({p1_angle, V}, S) -> S#state{p1_angle = V};
+apply_override({p1_vel, V}, S) -> S#state{p1_vel = V};
+apply_override({p2_angle, V}, S) -> S#state{p2_angle = V};
+apply_override({p2_vel, V}, S) -> S#state{p2_vel = V};
+apply_override(_Other, S) -> S.
 
 %% Sense reads the current cart-pole state; it does not advance the physics.
 %% The physics step happens in act/4, once the network has decided a force.
