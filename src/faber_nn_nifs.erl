@@ -41,6 +41,8 @@
     evaluate_ode/5,
     evaluate_ode_with_weights/7,
     evaluate_cfc_batch/4,
+    compile_cfc_pop/6,
+    cfc_pop_step/3,
 
     %% Distance and KNN (Novelty Search)
     euclidean_distance/2,
@@ -187,6 +189,15 @@ compatibility_distance(_ConnectionsA, _ConnectionsB, _C1, _C2, _C3) ->
 
 -spec benchmark_evaluate(reference(), [float()], pos_integer()) -> float().
 benchmark_evaluate(_Network, _Inputs, _Iterations) ->
+    erlang:nif_error(nif_not_loaded).
+
+-spec compile_cfc_pop([[float()]], [[float()]], pos_integer(), pos_integer(),
+                      pos_integer(), float()) -> reference().
+compile_cfc_pop(_WeightsPop, _TausPop, _InputSize, _HiddenSize, _OutputSize, _Bound) ->
+    erlang:nif_error(nif_not_loaded).
+
+-spec cfc_pop_step(reference(), [[float()]], [[float()]]) -> {[[float()]], [[float()]]}.
+cfc_pop_step(_Pop, _StatesPop, _InputsPop) ->
     erlang:nif_error(nif_not_loaded).
 
 %% ============================================================================

@@ -26,6 +26,8 @@
     evaluate_ode/5,
     evaluate_ode_with_weights/7,
     evaluate_cfc_batch/4,
+    compile_cfc_pop/6,
+    cfc_pop_step/3,
     %% Distance and KNN (Novelty Search)
     euclidean_distance/2,
     euclidean_distance_batch/2,
@@ -261,6 +263,54 @@ evaluate_cfc_batch(Inputs, InitialState, Tau, Bound) ->
         Inputs
     ),
     Results.
+
+%% @doc Compile a population of CfC feedforward nets (pure-Erlang path).
+%% Returns an opaque term (not a NIF resource); cfc_pop_step/3 consumes it.
+-spec compile_cfc_pop([[float()]], [[float()]], pos_integer(), pos_integer(),
+                      pos_integer(), float()) -> term().
+compile_cfc_pop(WeightsPop, TausPop, InputSize, HiddenSize, OutputSize, Bound) ->
+    Nets = [reshape_cfc_net(Flat, InputSize, HiddenSize, OutputSize, Taus)
+            || {Flat, Taus} <- lists:zip(WeightsPop, TausPop)],
+    {cfc_pop, OutputSize, Bound, Nets}.
+
+%% @doc One forward step for the whole population (pure-Erlang path).
+%% Uses this module's evaluate_cfc formula per hidden neuron, for consistency
+%% with the per-neuron fallback path in network_evaluator.
+-spec cfc_pop_step(term(), [[float()]], [[float()]]) -> {[[float()]], [[float()]]}.
+cfc_pop_step({cfc_pop, _OutputSize, Bound, Nets}, StatesPop, InputsPop) ->
+    Results = [pop_step_one(Net, State, In, Bound)
+               || {Net, State, In} <- lists:zip3(Nets, StatesPop, InputsPop)],
+    {[O || {O, _} <- Results], [S || {_, S} <- Results]}.
+
+reshape_cfc_net(Flat, In, H, Out, Taus) ->
+    {W1Flat, R1} = lists:split(H * In, Flat),
+    {B1, R2} = lists:split(H, R1),
+    {W2Flat, R3} = lists:split(Out * H, R2),
+    {B2, []} = lists:split(Out, R3),
+    {pop_chunk(W1Flat, In), B1, pop_chunk(W2Flat, H), B2, Taus}.
+
+pop_step_one({W1, B1, W2, B2, Taus}, State, In, Bound) ->
+    Hidden = [pop_cfc_neuron(Wj, Bj, In, Sj, Tj, Bound)
+              || {Wj, Bj, Sj, Tj} <- pop_zip4(W1, B1, State, Taus)],
+    Outputs = [math:tanh(pop_dot(Wk, Hidden) + Bk) || {Wk, Bk} <- lists:zip(W2, B2)],
+    {Outputs, Hidden}.
+
+%% Mirrors this module's evaluate_cfc/4 (F=tanh(sum), H=sum, out=new_state).
+pop_cfc_neuron(W, B, In, State, _Tau, Bound) ->
+    Sum = pop_dot(W, In) + B,
+    SigNegF = sigmoid(-math:tanh(Sum)),
+    clamp(SigNegF * State + (1 - SigNegF) * Sum, -Bound, Bound).
+
+pop_dot(W, X) -> lists:sum(lists:zipwith(fun(A, Bb) -> A * Bb end, W, X)).
+
+pop_zip4([A | As], [B | Bs], [C | Cs], [D | Ds]) ->
+    [{A, B, C, D} | pop_zip4(As, Bs, Cs, Ds)];
+pop_zip4([], [], [], []) -> [].
+
+pop_chunk([], _N) -> [];
+pop_chunk(L, N) ->
+    {Row, Rest} = lists:split(N, L),
+    [Row | pop_chunk(Rest, N)].
 
 %%==============================================================================
 %% Distance and KNN Fallbacks (Novelty Search)

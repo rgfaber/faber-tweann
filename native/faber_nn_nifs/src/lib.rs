@@ -245,6 +245,7 @@ pub struct NetworkResource(pub CompiledNetwork);
 #[allow(deprecated)]
 fn load(env: Env, _: Term) -> bool {
     let _ = rustler::resource!(NetworkResource, env);
+    let _ = rustler::resource!(CfcPopResource, env);
     true
 }
 
@@ -514,6 +515,123 @@ fn evaluate_cfc_batch(
             (new_state, output)
         })
         .collect()
+}
+
+// ============================================================================
+// Batched population CfC-feedforward evaluator (P5 infra)
+//
+// One Rust call evaluates one forward STEP for a whole population of
+// identically-shaped CfC feedforward networks (In -> [Hidden CfC] -> Out, tanh
+// output). Weights are compiled ONCE per generation into a resource (fixing both
+// the pure-Erlang forward-pass cost and the per-neuron NIF-crossing cost, and
+// avoiding the ResourceArc accumulation that disabled the fast path); only the
+// small per-network states/inputs cross per step. Bit-faithful to
+// network_evaluator:evaluate_neurons_cfc (evaluate_cfc_impl for hidden, tanh for
+// the standard output layer).
+// ============================================================================
+
+/// One CfC feedforward network: In -> [Hidden CfC] -> Out (tanh output).
+struct CfcNet {
+    w1: Vec<Vec<f64>>, // hidden x input (row = one neuron's input weights)
+    b1: Vec<f64>,      // hidden
+    w2: Vec<Vec<f64>>, // output x hidden
+    b2: Vec<f64>,      // output
+    taus: Vec<f64>,    // hidden
+}
+
+/// A compiled population of identically-shaped CfC feedforward networks.
+pub struct CfcPop {
+    hidden_size: usize,
+    output_size: usize,
+    bound: f64,
+    nets: Vec<CfcNet>,
+}
+
+pub struct CfcPopResource(pub CfcPop);
+
+/// Reshape one flat weight vector (network_evaluator:get_weights layout:
+/// L1 weights row-major ++ L1 biases ++ L2 weights row-major ++ L2 biases).
+fn reshape_cfc_net(
+    flat: &[f64],
+    input_size: usize,
+    hidden_size: usize,
+    output_size: usize,
+    taus: Vec<f64>,
+) -> CfcNet {
+    let mut idx = 0;
+    let mut w1 = Vec::with_capacity(hidden_size);
+    for _ in 0..hidden_size {
+        w1.push(flat[idx..idx + input_size].to_vec());
+        idx += input_size;
+    }
+    let b1 = flat[idx..idx + hidden_size].to_vec();
+    idx += hidden_size;
+    let mut w2 = Vec::with_capacity(output_size);
+    for _ in 0..output_size {
+        w2.push(flat[idx..idx + hidden_size].to_vec());
+        idx += hidden_size;
+    }
+    let b2 = flat[idx..idx + output_size].to_vec();
+    CfcNet { w1, b1, w2, b2, taus }
+}
+
+/// Compile a whole population once. weights_pop[i] and taus_pop[i] describe net i.
+#[rustler::nif]
+fn compile_cfc_pop(
+    weights_pop: Vec<Vec<f64>>,
+    taus_pop: Vec<Vec<f64>>,
+    input_size: usize,
+    hidden_size: usize,
+    output_size: usize,
+    bound: f64,
+) -> NifResult<ResourceArc<CfcPopResource>> {
+    let nets: Vec<CfcNet> = weights_pop
+        .into_iter()
+        .zip(taus_pop)
+        .map(|(flat, taus)| reshape_cfc_net(&flat, input_size, hidden_size, output_size, taus))
+        .collect();
+    Ok(ResourceArc::new(CfcPopResource(CfcPop {
+        hidden_size,
+        output_size,
+        bound,
+        nets,
+    })))
+}
+
+/// One forward step for the whole population.
+/// states_pop[i] = net i's hidden CfC state; inputs_pop[i] = net i's inputs.
+/// Returns (outputs_pop, new_states_pop).
+#[rustler::nif(schedule = "DirtyCpu")]
+fn cfc_pop_step(
+    pop: ResourceArc<CfcPopResource>,
+    states_pop: Vec<Vec<f64>>,
+    inputs_pop: Vec<Vec<f64>>,
+) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
+    let p = &pop.0;
+    let mut outputs = Vec::with_capacity(p.nets.len());
+    let mut new_states = Vec::with_capacity(p.nets.len());
+    for (i, net) in p.nets.iter().enumerate() {
+        let inputs = &inputs_pop[i];
+        let state = &states_pop[i];
+        let mut hidden_out = vec![0.0f64; p.hidden_size];
+        let mut ns = vec![0.0f64; p.hidden_size];
+        for j in 0..p.hidden_size {
+            let sum: f64 = net.w1[j].iter().zip(inputs.iter()).map(|(w, x)| w * x).sum::<f64>()
+                + net.b1[j];
+            let (new_s, _) = evaluate_cfc_impl(sum, state[j], net.taus[j], p.bound, &[], &[]);
+            ns[j] = new_s;
+            hidden_out[j] = new_s;
+        }
+        let mut out = vec![0.0f64; p.output_size];
+        for k in 0..p.output_size {
+            let sum: f64 = net.w2[k].iter().zip(hidden_out.iter()).map(|(w, x)| w * x).sum::<f64>()
+                + net.b2[k];
+            out[k] = sum.tanh();
+        }
+        outputs.push(out);
+        new_states.push(ns);
+    }
+    (outputs, new_states)
 }
 
 // Internal implementation for CfC evaluation

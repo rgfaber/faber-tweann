@@ -66,6 +66,8 @@
     evaluate_ode/5,
     evaluate_ode_with_weights/7,
     evaluate_cfc_batch/4,
+    compile_cfc_pop/6,
+    cfc_pop_step/3,
     %% Distance and KNN (Novelty Search)
     euclidean_distance/2,
     euclidean_distance_batch/2,
@@ -307,6 +309,22 @@ evaluate_cfc(Input, State, Tau, Bound) ->
     case impl_module() of
         faber_nn_nifs -> faber_nn_nifs:evaluate_cfc(Input, State, Tau, Bound);
         _ -> tweann_nif_fallback:evaluate_cfc(Input, State, Tau, Bound)
+    end.
+
+compile_cfc_pop(WeightsPop, TausPop, InputSize, HiddenSize, OutputSize, Bound) ->
+    case impl_module() of
+        faber_nn_nifs ->
+            faber_nn_nifs:compile_cfc_pop(WeightsPop, TausPop, InputSize,
+                                          HiddenSize, OutputSize, Bound);
+        _ ->
+            tweann_nif_fallback:compile_cfc_pop(WeightsPop, TausPop, InputSize,
+                                                HiddenSize, OutputSize, Bound)
+    end.
+
+cfc_pop_step(Pop, StatesPop, InputsPop) ->
+    case impl_module() of
+        faber_nn_nifs -> faber_nn_nifs:cfc_pop_step(Pop, StatesPop, InputsPop);
+        _ -> tweann_nif_fallback:cfc_pop_step(Pop, StatesPop, InputsPop)
     end.
 
 %% @doc CfC evaluation with custom backbone and head weights.
