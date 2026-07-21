@@ -168,7 +168,8 @@ evaluate_with_state(#network{layers = Layers, activation = Activation,
 %% The evolutionary search tunes the RULE {A,B,C,D,Eta}, not the weights, so the
 %% network adapts its own weights within an episode. Biases are not plastic.
 -spec evaluate_with_plasticity(network(), [float()],
-                               {float(), float(), float(), float(), float()}) ->
+                               {float(), float(), float(), float(), float()}
+                               | {oja, float()}) ->
     {[float()], network()}.
 evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
                                   output_activation = OutputActivation} = Net, Inputs, Rule) ->
@@ -191,8 +192,13 @@ plastic_layer(Weights, Biases, Inputs, Activation, Rule) ->
                   || {W, Out} <- lists:zip(Weights, Outputs)],
     {Outputs, {NewWeights, Biases}}.
 
+%% ABCD-Hebbian: dw = Eta*(A*pre*post + B*pre + C*post + D).
 hebbian_neuron(W, Pre, Post, {A, B, C, D, Eta}) ->
     [clamp_weight(Wi + Eta * (A * Pi * Post + B * Pi + C * Post + D))
+     || {Wi, Pi} <- lists:zip(W, Pre)];
+%% Oja's rule: dw = Eta*post*(pre - post*w). Self-normalising (weights stay bounded).
+hebbian_neuron(W, Pre, Post, {oja, Eta}) ->
+    [clamp_weight(Wi + Eta * Post * (Pi - Post * Wi))
      || {Wi, Pi} <- lists:zip(W, Pre)].
 
 clamp_weight(X) when X < -10.0 -> -10.0;

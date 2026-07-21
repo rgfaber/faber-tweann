@@ -43,6 +43,20 @@ opposite_cues_store_different_memory_test() ->
     MemM = mem_after_cue(Net0, Init, -1.0),
     ?assert(abs(MemP - MemM) > 0.0).
 
+%% Oja's rule also moves weights, and (being self-normalising) keeps them bounded.
+oja_rule_moves_and_bounds_weights_test() ->
+    rand:seed(exsss, {31, 9, 9}),
+    Net0 = network_evaluator:create_feedforward(2, [6], 1, tanh, tanh),
+    W0 = network_evaluator:get_weights(Net0),
+    Net1 = lists:foldl(
+             fun(_, N) ->
+                 {_, N2} = network_evaluator:evaluate_with_plasticity(N, [1.0, 0.5], {oja, 0.2}),
+                 N2
+             end, Net0, lists:seq(1, 50)),
+    W1 = network_evaluator:get_weights(Net1),
+    ?assert(W0 =/= W1),
+    ?assert(lists:all(fun(X) -> abs(X) =< 10.0 end, W1)).
+
 mem_after_cue(Net0, Init, Cue) ->
     {_Out, Net1} = network_evaluator:evaluate_with_plasticity(
                      network_evaluator:set_weights(Net0, Init), [Cue, 0.0], ?RULE),
