@@ -34,6 +34,7 @@
     get_topology/1,
     get_viz_data/3,
     reset_internal_state/1,
+    get_internal_state/1,
     get_layers/1,
     get_activation/1,
     get_output_activation/1,
@@ -202,6 +203,11 @@ clamp_weight(X) -> X.
 %%
 %% Call this at the start of each episode to prevent state leakage between
 %% independent evaluation sequences (e.g., between game rounds).
+%% @doc Read the CfC internal state (the memory carrier); undefined for a plain net.
+-spec get_internal_state(network()) -> [[float()]] | undefined.
+get_internal_state(#network{internal_state = State}) ->
+    State.
+
 -spec reset_internal_state(network()) -> network().
 reset_internal_state(#network{internal_state = undefined} = Net) ->
     Net;
