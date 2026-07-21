@@ -123,14 +123,7 @@ handle_call({register, MorphologyName, Module}, _From, State) ->
     % Verify module is loaded
     case code:ensure_loaded(Module) of
         {module, Module} ->
-            % Verify module exports required callbacks
-            case verify_morphology_module(Module) of
-                ok ->
-                    ets:insert(?TABLE, {MorphologyName, Module}),
-                    {reply, ok, State};
-                {error, Reason} ->
-                    {reply, {error, Reason}, State}
-            end;
+            register_verified_morphology(MorphologyName, Module, State);
         {error, Reason} ->
             {reply, {error, {module_not_loaded, Reason}}, State}
     end;
@@ -161,6 +154,17 @@ code_change(_OldVsn, State, _Extra) ->
 %%==============================================================================
 %% Internal Functions
 %%==============================================================================
+
+%% @private Insert the morphology only when the module exports the required
+%% callbacks; otherwise report the verification error.
+register_verified_morphology(MorphologyName, Module, State) ->
+    case verify_morphology_module(Module) of
+        ok ->
+            ets:insert(?TABLE, {MorphologyName, Module}),
+            {reply, ok, State};
+        {error, Reason} ->
+            {reply, {error, Reason}, State}
+    end.
 
 %% @private
 %% @doc Verify that a module implements morphology_behaviour.

@@ -244,16 +244,7 @@ actuate(softmax, Input, _ScapePid, _Parameters) ->
 
 actuate(argmax, Input, _ScapePid, _Parameters) ->
     %% Argmax - return index of maximum value (0-indexed)
-    {_Max, Index, _} = lists:foldl(
-        fun(V, {MaxV, MaxI, I}) ->
-            case V > MaxV of
-                true -> {V, I, I + 1};
-                false -> {MaxV, MaxI, I + 1}
-            end
-        end,
-        {hd(Input), 0, 0},
-        Input
-    ),
+    {_Max, Index, _} = lists:foldl(fun argmax_step/2, {hd(Input), 0, 0}, Input),
     [float(Index)];
 
 actuate(scape, Input, ScapePid, Parameters) ->
@@ -271,6 +262,14 @@ actuate(scape, Input, ScapePid, Parameters) ->
 actuate(_ActuatorName, Input, _ScapePid, _Parameters) ->
     %% Default: pass through
     Input.
+
+%% @private Fold step for argmax: track the running maximum value, the index at
+%% which it occurred, and the current position.
+argmax_step(V, {MaxV, MaxI, I}) ->
+    case V > MaxV of
+        true -> {V, I, I + 1};
+        false -> {MaxV, MaxI, I + 1}
+    end.
 
 %% @private
 %% @doc Send the output to the scape and receive fitness back.

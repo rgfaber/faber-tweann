@@ -112,14 +112,7 @@ cleanup(BrainId) ->
 
     %% Leave any groups that belong to this brain
     lists:foreach(
-        fun(Group) ->
-            case Group of
-                {brain_pubsub, BrainId, _Topic} ->
-                    pg:leave(?SCOPE, Group, self());
-                _ ->
-                    ok
-            end
-        end,
+        fun(Group) -> leave_if_brain_group(Group, BrainId) end,
         Groups
     ),
     ok.
@@ -179,12 +172,7 @@ list_topics(BrainId) ->
 
     %% Filter to this brain's groups and extract topics
     lists:filtermap(
-        fun(Group) ->
-            case Group of
-                {brain_pubsub, BrainId, Topic} -> {true, Topic};
-                _ -> false
-            end
-        end,
+        fun(Group) -> brain_topic(Group, BrainId) end,
         Groups
     ).
 
@@ -196,3 +184,15 @@ list_topics(BrainId) ->
 -spec make_group(brain_id(), event_type()) -> term().
 make_group(BrainId, Topic) ->
     {brain_pubsub, BrainId, Topic}.
+
+%% @private Leave the group when it belongs to this brain, otherwise do nothing.
+leave_if_brain_group({brain_pubsub, BrainId, _Topic} = Group, BrainId) ->
+    pg:leave(?SCOPE, Group, self());
+leave_if_brain_group(_Group, _BrainId) ->
+    ok.
+
+%% @private Extract the topic when the group belongs to this brain.
+brain_topic({brain_pubsub, BrainId, Topic}, BrainId) ->
+    {true, Topic};
+brain_topic(_Group, _BrainId) ->
+    false.

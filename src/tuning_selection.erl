@@ -87,20 +87,23 @@ all(Ids, _Generation, PR, _AP) ->
 %% each paired with its age-annealed spread.
 recent(Ids, Generation, AgeLimit, PR, AP) ->
     lists:foldl(
-        fun(Id, Acc) ->
-            case generation_of(Id) of
-                undefined ->
-                    Acc;
-                Gen when Gen >= (Generation - AgeLimit) ->
-                    Age = Generation - Gen,
-                    Spread = PR * math:pi() * math:pow(AP, Age),
-                    [{Id, Spread} | Acc];
-                _ ->
-                    Acc
-            end
-        end,
+        fun(Id, Acc) -> recent_acc(Id, Generation, AgeLimit, PR, AP, Acc) end,
         [],
         Ids).
+
+%% @private Fold step for recent/5: prepend the age-annealed spread when the
+%% neuron is within AgeLimit generations, otherwise leave the accumulator as is.
+recent_acc(Id, Generation, AgeLimit, PR, AP, Acc) ->
+    case generation_of(Id) of
+        undefined ->
+            Acc;
+        Gen when Gen >= (Generation - AgeLimit) ->
+            Age = Generation - Gen,
+            Spread = PR * math:pi() * math:pow(AP, Age),
+            [{Id, Spread} | Acc];
+        _ ->
+            Acc
+    end.
 
 %% @private Read a neuron's or actuator's generation from the genotype.
 generation_of({_, neuron} = Id) ->

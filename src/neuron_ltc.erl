@@ -187,11 +187,7 @@ loop(State) ->
         %% generational level via ltc_mutations, not the per-agent tuner, so
         %% this mirrors the standard neuron and keeps the two arms comparable.
         {perturb, Range} ->
-            PerturbedWeights = maps:map(
-                fun(_Pid, WSpecs) ->
-                    perturbation_utils:perturb_weights(WSpecs, Range)
-                end,
-                State#state.input_weights),
+            PerturbedWeights = perturb_input_weights(State#state.input_weights, Range),
             PerturbedBias = perturbation_utils:sat(
                 State#state.bias + (rand:uniform() - 0.5) * Range, 3.1415926),
             loop(State#state{input_weights = PerturbedWeights,
@@ -199,13 +195,7 @@ loop(State) ->
 
         %% Revert to the last backup (the perturbation was worse).
         restore ->
-            case State#state.saved_weights of
-                undefined ->
-                    loop(State);
-                Saved ->
-                    loop(State#state{input_weights = Saved,
-                                     bias = State#state.saved_bias})
-            end;
+            handle_restore(State);
 
         %% Reset temporal memory at the start of each evaluation episode, so the
         %% network's memory of one episode does not leak into the next.
@@ -260,20 +250,45 @@ loop(State) ->
         %% targets AND zeroes the temporal memory, so each evaluation starts from
         %% a clean internal_state.
         {reset_prep, ExoSelfPid} ->
-            flush_forwards(),
-            ExoSelfPid ! {neuron_reset_ready, self()},
-            receive
-                reset ->
-                    _ = [RoPid ! {forward, self(), [0.0]}
-                         || RoPid <- State#state.ro_pids],
-                    loop(State#state{acc_input = #{}, internal_state = 0.0});
-                {cortex, terminate} ->
-                    ok;
-                terminate ->
-                    ok
-            end
+            handle_reset_prep(ExoSelfPid, State)
     after Timeout ->
         handle_input_timeout(State)
+    end.
+
+%% @private Jitter each input source's weight specs by the annealed range.
+perturb_input_weights(InputWeights, Range) ->
+    maps:map(
+        fun(_Pid, WSpecs) ->
+            perturbation_utils:perturb_weights(WSpecs, Range)
+        end,
+        InputWeights).
+
+%% @private Revert to the last backed-up weights and bias. No-op when nothing
+%% was saved yet.
+handle_restore(State) ->
+    case State#state.saved_weights of
+        undefined ->
+            loop(State);
+        Saved ->
+            loop(State#state{input_weights = Saved,
+                             bias = State#state.saved_bias})
+    end.
+
+%% @private Two-phase evaluation reset (see neuron.erl). Flush stale forwards,
+%% ack, then on the follow-up message either re-seed recurrent targets and zero
+%% the temporal memory (reset) or terminate.
+handle_reset_prep(ExoSelfPid, State) ->
+    flush_forwards(),
+    ExoSelfPid ! {neuron_reset_ready, self()},
+    receive
+        reset ->
+            _ = [RoPid ! {forward, self(), [0.0]}
+                 || RoPid <- State#state.ro_pids],
+            loop(State#state{acc_input = #{}, internal_state = 0.0});
+        {cortex, terminate} ->
+            ok;
+        terminate ->
+            ok
     end.
 
 %% @private Update LTC-specific parameters
@@ -329,14 +344,17 @@ is_ready(InputPids, AccInput) ->
 
 split_heads(InputPids, AccInput) ->
     lists:foldl(
-        fun(Pid, {Heads, Rem}) ->
-            case maps:get(Pid, AccInput, []) of
-                [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
-                [] -> {Heads, Rem}
-            end
-        end,
+        fun(Pid, Acc) -> split_head(Pid, AccInput, Acc) end,
         {#{}, #{}},
         InputPids).
+
+%% @private Take one signal from a single source's queue into the heads map,
+%% keeping the remainder for later cycles.
+split_head(Pid, AccInput, {Heads, Rem}) ->
+    case maps:get(Pid, AccInput, []) of
+        [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
+        [] -> {Heads, Rem}
+    end.
 
 process_and_forward(State) ->
     #state{

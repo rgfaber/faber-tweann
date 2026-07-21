@@ -213,13 +213,12 @@ shuffle_array(Array, I) ->
 %% @private Find agent with best fitness in a list.
 -spec find_best_agent([{term(), [float()]}]) -> {term(), [float()]}.
 find_best_agent([First | Rest]) ->
-    lists:foldl(
-        fun({_Id, Fitness} = Agent, {_BestId, BestFitness} = BestSoFar) ->
-            case compare_fitness(Fitness, BestFitness) of
-                true -> Agent;
-                false -> BestSoFar
-            end
-        end,
-        First,
-        Rest
-    ).
+    lists:foldl(fun keep_fitter/2, First, Rest).
+
+%% @private Fold step for find_best_agent/1: keep whichever agent has the
+%% better fitness.
+keep_fitter({_Id, Fitness} = Agent, {_BestId, BestFitness} = BestSoFar) ->
+    case compare_fitness(Fitness, BestFitness) of
+        true -> Agent;
+        false -> BestSoFar
+    end.

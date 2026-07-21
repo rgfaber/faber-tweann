@@ -438,17 +438,21 @@ compile_for_nif(Network = #network{layers = Layers, activation = Activation,
                                    output_activation = OutputActivation}) ->
     case tweann_nif:is_loaded() of
         true ->
-            try
-                OA = resolve_output_activation(OutputActivation, Activation),
-                {Nodes, InputCount, OutputIndices} = build_nif_network(Layers, Activation, OA),
-                CompiledRef = tweann_nif:compile_network(Nodes, InputCount, OutputIndices),
-                Network#network{compiled_ref = CompiledRef}
-            catch
-                _:_ ->
-                    %% Compilation failed, use Erlang fallback
-                    Network
-            end;
+            try_compile_for_nif(Network, Layers, Activation, OutputActivation);
         false ->
+            Network
+    end.
+
+%% @private Attempt NIF compilation, falling back to the Erlang network on error.
+try_compile_for_nif(Network, Layers, Activation, OutputActivation) ->
+    try
+        OA = resolve_output_activation(OutputActivation, Activation),
+        {Nodes, InputCount, OutputIndices} = build_nif_network(Layers, Activation, OA),
+        CompiledRef = tweann_nif:compile_network(Nodes, InputCount, OutputIndices),
+        Network#network{compiled_ref = CompiledRef}
+    catch
+        _:_ ->
+            %% Compilation failed, use Erlang fallback
             Network
     end.
 
@@ -475,25 +479,12 @@ build_nif_network(Layers, Activation, OutputActivation) ->
             CurrentLayerStart = PrevLayerStart + PrevLayerSize,
 
             %% Use output activation for the last layer
-            LayerActivation = case LayerNum of
-                NumLayers -> OutputActivation;
-                _ -> Activation
-            end,
+            LayerActivation = layer_nif_activation(LayerNum, NumLayers, OutputActivation, Activation),
 
             %% Each row in WeightMatrix is weights for one neuron
             %% WeightMatrix[neuron][input] = weight from input to neuron
-            NewNodes = lists:zipwith(
-                fun(NeuronWeights, Bias) ->
-                    NeuronIdx = CurrentLayerStart + length(Acc) - length(InputNodes),
-                    Connections = [{PrevLayerStart + I, W}
-                                   || {I, W} <- lists:zip(
-                                        lists:seq(0, length(NeuronWeights) - 1),
-                                        NeuronWeights)],
-                    {NeuronIdx, hidden, LayerActivation, Bias, Connections}
-                end,
-                WeightMatrix,
-                Biases
-            ),
+            NewNodes = build_nif_layer_nodes(WeightMatrix, Biases, CurrentLayerStart,
+                                             Acc, InputNodes, PrevLayerStart, LayerActivation),
             {Acc ++ NewNodes, {CurrentLayerStart, LayerNum + 1}}
         end,
         {[], {0, 1}},
@@ -519,34 +510,62 @@ build_nif_network(Layers, Activation, OutputActivation) ->
 
     {FinalNodes, InputCount, OutputIndices}.
 
+%% @private Select the activation for a layer: output activation on the last
+%% layer, hidden activation otherwise.
+layer_nif_activation(LayerNum, NumLayers, OutputActivation, _Activation)
+  when LayerNum =:= NumLayers ->
+    OutputActivation;
+layer_nif_activation(_LayerNum, _NumLayers, _OutputActivation, Activation) ->
+    Activation.
+
+%% @private Build the flat node list for one layer during NIF compilation.
+build_nif_layer_nodes(WeightMatrix, Biases, CurrentLayerStart, Acc, InputNodes,
+                      PrevLayerStart, LayerActivation) ->
+    lists:zipwith(
+        fun(NeuronWeights, Bias) ->
+            NeuronIdx = CurrentLayerStart + length(Acc) - length(InputNodes),
+            Connections = [{PrevLayerStart + I, W}
+                           || {I, W} <- lists:zip(
+                                lists:seq(0, length(NeuronWeights) - 1),
+                                NeuronWeights)],
+            {NeuronIdx, hidden, LayerActivation, Bias, Connections}
+        end,
+        WeightMatrix,
+        Biases
+    ).
+
 %% @private Load genotype structure from ETS
 load_genotype_structure(AgentId) ->
     case genotype:dirty_read({agent, AgentId}) of
         undefined ->
             {error, agent_not_found};
         Agent ->
-            CxId = element(3, Agent), %% #agent.cx_id
-            case genotype:dirty_read({cortex, CxId}) of
-                undefined ->
-                    {error, cortex_not_found};
-                Cortex ->
-                    %% Load neurons
-                    NeuronIds = element(5, Cortex), %% #cortex.neuron_ids
-                    Neurons = [genotype:dirty_read({neuron, NId})
-                               || NId <- NeuronIds],
+            load_cortex_structure(Agent)
+    end.
 
-                    %% Load sensors for input count
-                    SensorIds = element(6, Cortex), %% #cortex.sensor_ids
-                    Sensors = [genotype:dirty_read({sensor, SId})
-                               || SId <- SensorIds],
+%% @private Load the cortex and its sensors/neurons/actuators for an agent.
+load_cortex_structure(Agent) ->
+    CxId = element(3, Agent), %% #agent.cx_id
+    case genotype:dirty_read({cortex, CxId}) of
+        undefined ->
+            {error, cortex_not_found};
+        Cortex ->
+            %% Load neurons
+            NeuronIds = element(5, Cortex), %% #cortex.neuron_ids
+            Neurons = [genotype:dirty_read({neuron, NId})
+                       || NId <- NeuronIds],
 
-                    %% Load actuators for output count
-                    ActuatorIds = element(7, Cortex), %% #cortex.actuator_ids
-                    Actuators = [genotype:dirty_read({actuator, AId})
-                                 || AId <- ActuatorIds],
+            %% Load sensors for input count
+            SensorIds = element(6, Cortex), %% #cortex.sensor_ids
+            Sensors = [genotype:dirty_read({sensor, SId})
+                       || SId <- SensorIds],
 
-                    {ok, {Sensors, Neurons, Actuators}}
-            end
+            %% Load actuators for output count
+            ActuatorIds = element(7, Cortex), %% #cortex.actuator_ids
+            Actuators = [genotype:dirty_read({actuator, AId})
+                         || AId <- ActuatorIds],
+
+            {ok, {Sensors, Neurons, Actuators}}
     end.
 
 %% @private Build network from genotype structure
@@ -684,11 +703,7 @@ build_viz_nodes(LayerSizes, AllActivations, InputLabels) ->
     lists:flatten(
         lists:zipwith3(
             fun(LayerIdx, LayerSize, Activations) ->
-                Labels = case LayerIdx of
-                    1 -> pad_labels(InputLabels, LayerSize);
-                    N when N == NumLayers -> output_labels(LayerSize);
-                    _ -> hidden_labels(LayerSize)
-                end,
+                Labels = layer_labels(LayerIdx, LayerSize, NumLayers, InputLabels),
                 build_layer_nodes(LayerIdx, LayerSize, Activations, Labels, NumLayers)
             end,
             lists:seq(1, NumLayers),
@@ -696,6 +711,15 @@ build_viz_nodes(LayerSizes, AllActivations, InputLabels) ->
             AllActivations
         )
     ).
+
+%% @private Choose labels for a layer: padded input labels for the first layer,
+%% output labels for the last, hidden labels otherwise.
+layer_labels(1, LayerSize, _NumLayers, InputLabels) ->
+    pad_labels(InputLabels, LayerSize);
+layer_labels(LayerIdx, LayerSize, NumLayers, _InputLabels) when LayerIdx == NumLayers ->
+    output_labels(LayerSize);
+layer_labels(_LayerIdx, LayerSize, _NumLayers, _InputLabels) ->
+    hidden_labels(LayerSize).
 
 %% @private Build nodes for a single layer
 build_layer_nodes(LayerIdx, LayerSize, Activations, Labels, NumLayers) ->

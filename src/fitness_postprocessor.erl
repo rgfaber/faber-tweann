@@ -89,10 +89,7 @@ size_proportional(AgentFitnesses, PenaltyFactor) ->
 
             %% Apply penalty to first fitness objective
             %% (assumes first objective is primary performance metric)
-            AdjustedFitness = case Fitness of
-                [F1 | Rest] -> [F1 - Penalty | Rest];
-                [] -> []
-            end,
+            AdjustedFitness = apply_penalty(Fitness, Penalty),
 
             {AgentId, AdjustedFitness}
         end,
@@ -186,6 +183,13 @@ pareto_dominance(AgentFitnesses) ->
 %% Internal Functions - Size Proportional
 %% ============================================================================
 
+%% @private Apply penalty to the primary (first) fitness objective.
+-spec apply_penalty([float()], float()) -> [float()].
+apply_penalty([F1 | Rest], Penalty) ->
+    [F1 - Penalty | Rest];
+apply_penalty([], _Penalty) ->
+    [].
+
 %% @private Get number of neurons in agent's network.
 -spec get_agent_size(term()) -> non_neg_integer().
 get_agent_size(AgentId) ->
@@ -193,11 +197,15 @@ get_agent_size(AgentId) ->
         undefined ->
             0;  % Agent not found, assume size 0
         Agent ->
-            CortexId = Agent#agent.cx_id,
-            case genotype:read({cortex, CortexId}) of
-                undefined -> 0;
-                Cortex -> length(Cortex#cortex.neuron_ids)
-            end
+            cortex_size(Agent#agent.cx_id)
+    end.
+
+%% @private Count neurons in a cortex (0 if the cortex is missing).
+-spec cortex_size(term()) -> non_neg_integer().
+cortex_size(CortexId) ->
+    case genotype:read({cortex, CortexId}) of
+        undefined -> 0;
+        Cortex -> length(Cortex#cortex.neuron_ids)
     end.
 
 %% ============================================================================
@@ -219,30 +227,36 @@ calculate_min_max([FirstFitness | _] = Fitnesses) ->
             Values = [lists:nth(ObjIdx, F) || F <- Fitnesses, length(F) >= ObjIdx],
 
             %% Find min and max
-            case Values of
-                [] -> {0.0, 1.0};  % Default range
-                _ ->
-                    Min = lists:min(Values),
-                    Max = lists:max(Values),
-                    {Min, Max}
-            end
+            min_max_of(Values)
         end,
         lists:seq(1, NumObjectives)
     ).
+
+%% @private Compute {Min, Max} for a list of objective values.
+-spec min_max_of([float()]) -> {float(), float()}.
+min_max_of([]) ->
+    {0.0, 1.0};  % Default range
+min_max_of(Values) ->
+    Min = lists:min(Values),
+    Max = lists:max(Values),
+    {Min, Max}.
 
 %% @private Normalize a single fitness vector.
 -spec normalize_fitness([float()], [{float(), float()}]) -> [float()].
 normalize_fitness(Fitness, MinMax) ->
     lists:zipwith(
-        fun(Value, {Min, Max}) ->
-            case Max - Min of
-                +0.0 -> 0.5;  % No variance, use middle value
-                Range -> (Value - Min) / Range
-            end
-        end,
+        fun(Value, {Min, Max}) -> normalize_value(Value, Min, Max) end,
         Fitness,
         MinMax
     ).
+
+%% @private Scale a single value into [0, 1] (0.5 when there is no variance).
+-spec normalize_value(float(), float(), float()) -> float().
+normalize_value(Value, Min, Max) ->
+    case Max - Min of
+        +0.0 -> 0.5;  % No variance, use middle value
+        Range -> (Value - Min) / Range
+    end.
 
 %% ============================================================================
 %% Internal Functions - Pareto Dominance
@@ -271,30 +285,39 @@ build_dominance_map(AgentFitnesses) ->
     {[term()], non_neg_integer()}.
 find_dominance_relationships(AgentId, Fitness, AllAgents) ->
     lists:foldl(
-        fun({OtherId, OtherFitness}, {Dominated, DominatedBy}) ->
-            if
-                OtherId =:= AgentId ->
-                    {Dominated, DominatedBy};
-                true ->
-                    case dominates(Fitness, OtherFitness) of
-                        true ->
-                            %% This agent dominates the other
-                            {[OtherId | Dominated], DominatedBy};
-                        false ->
-                            case dominates(OtherFitness, Fitness) of
-                                true ->
-                                    %% Other agent dominates this one
-                                    {Dominated, DominatedBy + 1};
-                                false ->
-                                    %% No dominance relationship
-                                    {Dominated, DominatedBy}
-                            end
-                    end
-            end
+        fun({OtherId, OtherFitness}, Acc) ->
+            accumulate_dominance(AgentId, Fitness, OtherId, OtherFitness, Acc)
         end,
         {[], 0},
         AllAgents
     ).
+
+%% @private Update the {Dominated, DominatedBy} accumulator for one other agent.
+-spec accumulate_dominance(term(), [float()], term(), [float()],
+                           {[term()], non_neg_integer()}) ->
+    {[term()], non_neg_integer()}.
+accumulate_dominance(AgentId, _Fitness, AgentId, _OtherFitness, Acc) ->
+    %% Same agent - no relationship
+    Acc;
+accumulate_dominance(_AgentId, Fitness, OtherId, OtherFitness,
+                     {Dominated, DominatedBy}) ->
+    case dominates(Fitness, OtherFitness) of
+        true ->
+            %% This agent dominates the other
+            {[OtherId | Dominated], DominatedBy};
+        false ->
+            %% Other agent dominates this one iff it dominates
+            maybe_dominated_by(dominates(OtherFitness, Fitness),
+                               {Dominated, DominatedBy})
+    end.
+
+%% @private Increment the dominated-by count when the other agent dominates.
+-spec maybe_dominated_by(boolean(), {[term()], non_neg_integer()}) ->
+    {[term()], non_neg_integer()}.
+maybe_dominated_by(true, {Dominated, DominatedBy}) ->
+    {Dominated, DominatedBy + 1};
+maybe_dominated_by(false, Acc) ->
+    Acc.
 
 %% @private Check if fitness A dominates fitness B.
 %%
@@ -338,12 +361,16 @@ assign_pareto_ranks(AgentFitnesses, DominanceMap) ->
             %% Some agents weren't ranked - this shouldn't happen with correct algorithm
             %% But assign remaining agents to final front as fallback
             Unranked = AllAgentIds -- RankedIds,
-            MaxRank = case Result of
-                [] -> 1;
-                _ -> lists:max([R || {_Id, R} <- Result])
-            end,
+            MaxRank = max_rank(Result),
             Result ++ [{Id, MaxRank + 1} || Id <- Unranked]
     end.
+
+%% @private Highest assigned rank so far (1 when nothing has been ranked).
+-spec max_rank([{term(), pos_integer()}]) -> pos_integer().
+max_rank([]) ->
+    1;
+max_rank(Result) ->
+    lists:max([R || {_Id, R} <- Result]).
 
 %% @private Recursively assign ranks to Pareto fronts.
 -spec assign_ranks_recursive([term()],
@@ -377,22 +404,7 @@ find_next_front(CurrentFront, DominanceMap, Processed) ->
     %% For each agent in current front, decrement dominated count
     %% for agents it dominates
     DecrementedMap = lists:foldl(
-        fun(AgentId, Map) ->
-            case maps:get(AgentId, Map, {[], 0}) of
-                {Dominated, _Count} ->
-                    %% Decrement count for each dominated agent
-                    lists:foldl(
-                        fun(DomId, M) ->
-                            case maps:get(DomId, M, {[], 0}) of
-                                {DomList, DomCount} ->
-                                    maps:put(DomId, {DomList, DomCount - 1}, M)
-                            end
-                        end,
-                        Map,
-                        Dominated
-                    )
-            end
-        end,
+        fun decrement_dominated/2,
         DominanceMap,
         CurrentFront
     ),
@@ -400,3 +412,24 @@ find_next_front(CurrentFront, DominanceMap, Processed) ->
     %% Next front = agents with count 0 (excluding already processed)
     [Id || {Id, {_Dominated, 0}} <- maps:to_list(DecrementedMap),
            not sets:is_element(Id, Processed)].
+
+%% @private Decrement the dominated-by count of every agent dominated by AgentId.
+-spec decrement_dominated(term(),
+                          #{term() => {[term()], non_neg_integer()}}) ->
+    #{term() => {[term()], non_neg_integer()}}.
+decrement_dominated(AgentId, Map) ->
+    case maps:get(AgentId, Map, {[], 0}) of
+        {Dominated, _Count} ->
+            %% Decrement count for each dominated agent
+            lists:foldl(fun decrement_dominated_count/2, Map, Dominated)
+    end.
+
+%% @private Decrement a single agent's dominated-by count in the map.
+-spec decrement_dominated_count(term(),
+                                #{term() => {[term()], non_neg_integer()}}) ->
+    #{term() => {[term()], non_neg_integer()}}.
+decrement_dominated_count(DomId, M) ->
+    case maps:get(DomId, M, {[], 0}) of
+        {DomList, DomCount} ->
+            maps:put(DomId, {DomList, DomCount - 1}, M)
+    end.

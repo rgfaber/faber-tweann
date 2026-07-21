@@ -118,19 +118,22 @@ load_genotype(AgentId) ->
         undefined ->
             {error, {agent_not_found, AgentId}};
         Agent ->
-            CxId = Agent#agent.cx_id,
-            case genotype:dirty_read({cortex, CxId}) of
-                undefined ->
-                    {error, {cortex_not_found, CxId}};
-                Cortex ->
-                    Neurons = [genotype:dirty_read({neuron, NId})
-                               || NId <- Cortex#cortex.neuron_ids],
-                    Sensors = [genotype:dirty_read({sensor, SId})
-                               || SId <- Cortex#cortex.sensor_ids],
-                    Actuators = [genotype:dirty_read({actuator, AId})
-                                 || AId <- Cortex#cortex.actuator_ids],
-                    {ok, Cortex, Neurons, Sensors, Actuators}
-            end
+            load_cortex(Agent#agent.cx_id)
+    end.
+
+%% @private Load cortex and its neurons, sensors and actuators
+load_cortex(CxId) ->
+    case genotype:dirty_read({cortex, CxId}) of
+        undefined ->
+            {error, {cortex_not_found, CxId}};
+        Cortex ->
+            Neurons = [genotype:dirty_read({neuron, NId})
+                       || NId <- Cortex#cortex.neuron_ids],
+            Sensors = [genotype:dirty_read({sensor, SId})
+                       || SId <- Cortex#cortex.sensor_ids],
+            Actuators = [genotype:dirty_read({actuator, AId})
+                         || AId <- Cortex#cortex.actuator_ids],
+            {ok, Cortex, Neurons, Sensors, Actuators}
     end.
 
 %% @private Build mapping from record IDs to flat indices
@@ -230,22 +233,30 @@ convert_connections(InputIdps, IdToIndex) ->
                 %% Skip bias - handled separately
                 [];
             ({FromId, WeightList}) when is_list(WeightList) ->
-                case maps:find(FromId, IdToIndex) of
-                    {ok, FromIdx} ->
-                        %% Sum weights if multiple (shouldn't happen normally)
-                        TotalWeight = lists:sum([W || {W, _, _, _} <- WeightList]),
-                        [{FromIdx, TotalWeight}];
-                    error ->
-                        []
-                end;
+                connection_from_weight_list(FromId, WeightList, IdToIndex);
             ({FromId, Weight}) when is_number(Weight) ->
-                case maps:find(FromId, IdToIndex) of
-                    {ok, FromIdx} -> [{FromIdx, Weight}];
-                    error -> []
-                end
+                connection_from_weight(FromId, Weight, IdToIndex)
         end,
         InputIdps
     ).
+
+%% @private Connection for an input carrying a weight list; sums the weights
+connection_from_weight_list(FromId, WeightList, IdToIndex) ->
+    case maps:find(FromId, IdToIndex) of
+        {ok, FromIdx} ->
+            %% Sum weights if multiple (shouldn't happen normally)
+            TotalWeight = lists:sum([W || {W, _, _, _} <- WeightList]),
+            [{FromIdx, TotalWeight}];
+        error ->
+            []
+    end.
+
+%% @private Connection for an input carrying a single numeric weight
+connection_from_weight(FromId, Weight, IdToIndex) ->
+    case maps:find(FromId, IdToIndex) of
+        {ok, FromIdx} -> [{FromIdx, Weight}];
+        error -> []
+    end.
 
 %% @private Generate a simple feedforward network
 generate_simple_network(InputCount, HiddenLayers, OutputCount) ->

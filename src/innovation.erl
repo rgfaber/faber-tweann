@@ -58,18 +58,7 @@ init() ->
     %% Create ETS tables for innovation tracking
     Tables = [link_innovation, node_innovation],
 
-    lists:foreach(
-        fun(Name) ->
-            case ets:whereis(Name) of
-                undefined ->
-                    ets:new(Name, [set, public, named_table, {keypos, 2},
-                                   {read_concurrency, true}]);
-                _Tid ->
-                    ok
-            end
-        end,
-        Tables
-    ),
+    lists:foreach(fun ensure_innovation_table/1, Tables),
 
     %% Initialize atomic counter using persistent_term
     %% The counter starts at 0 and is incremented atomically
@@ -90,12 +79,7 @@ init() ->
 reset() ->
     %% Clear ETS tables
     lists:foreach(
-        fun(Table) ->
-            case ets:whereis(Table) of
-                undefined -> ok;
-                _Tid -> ets:delete_all_objects(Table)
-            end
-        end,
+        fun clear_innovation_table/1,
         [link_innovation, node_innovation]
     ),
     %% Reset counter to 0
@@ -188,20 +172,24 @@ get_innovation_info(InnovationNum) ->
             {link, FromId, ToId};
         [] ->
             %% Check node innovations
-            NodeMatch = ets:fun2ms(
-                fun(#node_innovation{key = Key,
-                                     node_innovation = NodeInn,
-                                     in_innovation = InInn,
-                                     out_innovation = OutInn})
-                    when NodeInn =:= InnovationNum -> {Key, InInn, OutInn}
-                end
-            ),
-            case ets:select(node_innovation, NodeMatch) of
-                [{{FromId, ToId}, InInn, OutInn}] ->
-                    {node, FromId, ToId, InInn, OutInn};
-                [] ->
-                    not_found
-            end
+            get_node_innovation_info(InnovationNum)
+    end.
+
+%% @private Look up a node-split innovation by its innovation number.
+get_node_innovation_info(InnovationNum) ->
+    NodeMatch = ets:fun2ms(
+        fun(#node_innovation{key = Key,
+                             node_innovation = NodeInn,
+                             in_innovation = InInn,
+                             out_innovation = OutInn})
+            when NodeInn =:= InnovationNum -> {Key, InInn, OutInn}
+        end
+    ),
+    case ets:select(node_innovation, NodeMatch) of
+        [{{FromId, ToId}, InInn, OutInn}] ->
+            {node, FromId, ToId, InInn, OutInn};
+        [] ->
+            not_found
     end.
 
 %% @doc Get existing link innovation without creating one.
@@ -227,4 +215,25 @@ get_node_innovation(FromId, ToId) ->
             {NodeInn, InInn, OutInn};
         [] ->
             undefined
+    end.
+
+%%==============================================================================
+%% Internal Functions
+%%==============================================================================
+
+%% @private Create an innovation ETS table if it does not already exist.
+ensure_innovation_table(Name) ->
+    case ets:whereis(Name) of
+        undefined ->
+            ets:new(Name, [set, public, named_table, {keypos, 2},
+                           {read_concurrency, true}]);
+        _Tid ->
+            ok
+    end.
+
+%% @private Clear all objects from an innovation ETS table if it exists.
+clear_innovation_table(Table) ->
+    case ets:whereis(Table) of
+        undefined -> ok;
+        _Tid -> ets:delete_all_objects(Table)
     end.

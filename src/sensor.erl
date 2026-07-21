@@ -166,34 +166,43 @@ handle_sync(State) ->
             %% DXNN2 wire format: request {sense, Name, Params}, reply
             %% tagged `percept'. See faber-ecosystem/docs/PROTOCOL.md.
             ScapePid ! {self(), sense, SensorName, Parameters},
-            receive
-                {ScapePid, percept, SensoryVector} ->
-                    SensoryVector
-            after 5000 ->
-                %% A scape that does not answer is a bug, not a condition to
-                %% absorb: zeros would feed the network silent garbage and
-                %% corrupt fitness without any signal.
-                erlang:error({scape_sense_timeout, ScapePid, SensorName})
-            end
+            request_percept(ScapePid, SensorName)
     end,
 
     case EventDriven of
         true ->
-            %% Event-driven: publish sensor_output_ready
-            network_pubsub:publish(NetworkId, sensor_output_ready, #{
-                from => self(),
-                sensor_id => Id,
-                signal => Signal
-            });
+            publish_sensor_output(NetworkId, Id, Signal);
         false ->
-            %% Legacy: direct message to neurons
-            lists:foreach(
-                fun(NeuronPid) ->
-                    NeuronPid ! {forward, self(), Signal}
-                end,
-                FanoutPids
-            )
+            fanout_signal(FanoutPids, Signal)
     end.
+
+%% @private Await the scape's percept reply. A scape that does not answer is a
+%% bug, not a condition to absorb: zeros would feed the network silent garbage
+%% and corrupt fitness without any signal.
+request_percept(ScapePid, SensorName) ->
+    receive
+        {ScapePid, percept, SensoryVector} ->
+            SensoryVector
+    after 5000 ->
+        erlang:error({scape_sense_timeout, ScapePid, SensorName})
+    end.
+
+%% @private Event-driven: publish sensor_output_ready.
+publish_sensor_output(NetworkId, Id, Signal) ->
+    network_pubsub:publish(NetworkId, sensor_output_ready, #{
+        from => self(),
+        sensor_id => Id,
+        signal => Signal
+    }).
+
+%% @private Legacy: direct message to neurons.
+fanout_signal(FanoutPids, Signal) ->
+    lists:foreach(
+        fun(NeuronPid) ->
+            NeuronPid ! {forward, self(), Signal}
+        end,
+        FanoutPids
+    ).
 
 handle_scape_signal(Signal, State) ->
     #state{fanout_pids = FanoutPids} = State,

@@ -302,14 +302,7 @@ link_neurons(NeuronIds, IdToPid) ->
             _ = erase({neuron_idps, NeuronId}),
 
             %% Convert to PID-based weights map
-            InputWeights = lists:foldl(
-                fun({InputId, Weights}, Acc) ->
-                    InputPid = maps:get(InputId, IdToPid),
-                    Acc#{InputPid => Weights}
-                end,
-                #{},
-                InputIdps
-            ),
+            InputWeights = build_input_weights(InputIdps, IdToPid),
 
             InputPids = [maps:get(InputId, IdToPid) || {InputId, _} <- InputIdps],
 
@@ -319,10 +312,8 @@ link_neurons(NeuronIds, IdToPid) ->
             %% edge; a strictly higher layer is feedforward. The two sets are
             %% disjoint, so a target never receives the signal twice.
             NeuronLayer = layer_of(NeuronId),
-            {FeedforwardIds, RecurrentIds} = lists:partition(
-                fun(Id) -> layer_of(Id) > NeuronLayer end,
-                Neuron#neuron.output_ids
-            ),
+            {FeedforwardIds, RecurrentIds} =
+                partition_outputs(Neuron#neuron.output_ids, NeuronLayer),
             OutputPids = [maps:get(Id, IdToPid) || Id <- FeedforwardIds],
             RoPids = [maps:get(Id, IdToPid) || Id <- RecurrentIds],
 
@@ -333,6 +324,25 @@ link_neurons(NeuronIds, IdToPid) ->
             NeuronPid ! {link, input_weights, InputWeights}
         end,
         NeuronIds
+    ).
+
+%% Build the PID-based input weights map for a neuron from its stored input_idps.
+build_input_weights(InputIdps, IdToPid) ->
+    lists:foldl(
+        fun({InputId, Weights}, Acc) ->
+            InputPid = maps:get(InputId, IdToPid),
+            Acc#{InputPid => Weights}
+        end,
+        #{},
+        InputIdps
+    ).
+
+%% Partition a neuron's outputs into feedforward (strictly higher layer) and
+%% recurrent (same or lower layer) targets. The two sets are disjoint.
+partition_outputs(OutputIds, NeuronLayer) ->
+    lists:partition(
+        fun(Id) -> layer_of(Id) > NeuronLayer end,
+        OutputIds
     ).
 
 %% Layer coordinate of an id {{Layer, Unique}, Type}. Sensors are -1, neurons

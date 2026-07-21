@@ -369,10 +369,7 @@ handle_info({brain_event, evaluated, EventData}, State) ->
                 outputs => Outputs,
                 timestamp => erlang:system_time(millisecond)
             },
-            NewBuffer = case length(Buffer) >= MaxSize of
-                true -> [Experience | lists:droplast(Buffer)];
-                false -> [Experience | Buffer]
-            end,
+            NewBuffer = append_experience(Experience, Buffer, MaxSize),
             State#state{experience_buffer = NewBuffer};
         false ->
             State
@@ -403,6 +400,14 @@ terminate(_Reason, State) ->
 %%==============================================================================
 %% Internal Functions
 %%==============================================================================
+
+%% @private Append an experience to the buffer, dropping the oldest entry once
+%% the buffer has reached its maximum size.
+append_experience(Experience, Buffer, MaxSize) ->
+    case length(Buffer) >= MaxSize of
+        true -> [Experience | lists:droplast(Buffer)];
+        false -> [Experience | Buffer]
+    end.
 
 %% @private Process buffered experiences and apply learning
 do_learn_from_experience(State, _Reward) when State#state.enabled == false ->

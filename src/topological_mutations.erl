@@ -163,13 +163,17 @@ backward_only(NeuronId, Sources, Neuron) ->
 is_feedforward(Neuron) ->
     case genotype:dirty_read({cortex, Neuron#neuron.cx_id}) of
         undefined -> true;
-        Cortex ->
-            case genotype:dirty_read({agent, Cortex#cortex.agent_id}) of
-                undefined -> true;
-                Agent ->
-                    (Agent#agent.constraint)#constraint.connection_architecture
-                        =/= recurrent
-            end
+        Cortex -> agent_is_feedforward(Cortex)
+    end.
+
+%% @private An agent is feedforward unless its constraint explicitly declares a
+%% recurrent connection_architecture. A missing agent defaults to feedforward.
+agent_is_feedforward(Cortex) ->
+    case genotype:dirty_read({agent, Cortex#cortex.agent_id}) of
+        undefined -> true;
+        Agent ->
+            (Agent#agent.constraint)#constraint.connection_architecture
+                =/= recurrent
     end.
 
 connect_from_source(_NeuronId, _Neuron, []) ->

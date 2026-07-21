@@ -212,11 +212,8 @@ find_closest_species(Fingerprint, Threshold, Species) ->
 
     %% Find closest species
     {ClosestSpecieId, ClosestDistance} = lists:foldl(
-        fun({SpecieId, Distance}, {BestId, BestDist}) ->
-            if
-                Distance < BestDist -> {SpecieId, Distance};
-                true -> {BestId, BestDist}
-            end
+        fun(Candidate, Best) ->
+            closer_species(Candidate, Best)
         end,
         {undefined, infinity},
         Distances
@@ -227,6 +224,14 @@ find_closest_species(Fingerprint, Threshold, Species) ->
         true -> {ok, ClosestSpecieId};
         false -> not_found
     end.
+
+%% @private Keep the candidate species when it is strictly closer.
+-spec closer_species({term(), float()}, {term(), float() | infinity}) ->
+    {term(), float() | infinity}.
+closer_species({SpecieId, Distance}, {_BestId, BestDist}) when Distance < BestDist ->
+    {SpecieId, Distance};
+closer_species({_SpecieId, _Distance}, Best) ->
+    Best.
 
 %% @private Generate unique species identifier.
 -spec generate_specie_id() -> {float(), specie}.
@@ -305,29 +310,44 @@ generate_random_inputs(AgentId, NumSamples) ->
         undefined ->
             lists:duplicate(NumSamples, [0.0]);
         Agent ->
-            CortexId = Agent#agent.cx_id,
-            case genotype:read({cortex, CortexId}) of
-                undefined ->
-                    lists:duplicate(NumSamples, [0.0]);
-                Cortex ->
-                    %% Get first sensor to determine input size
-                    case Cortex#cortex.sensor_ids of
-                        [] ->
-                            lists:duplicate(NumSamples, [0.0]);
-                        [FirstSensorId | _] ->
-                            Sensor = genotype:read({sensor, FirstSensorId}),
-                            VectorLength = Sensor#sensor.vl,
-
-                            %% Generate random inputs
-                            lists:map(
-                                fun(_) ->
-                                    [rand:uniform() || _ <- lists:seq(1, VectorLength)]
-                                end,
-                                lists:seq(1, NumSamples)
-                            )
-                    end
-            end
+            random_inputs_from_cortex(Agent, NumSamples)
     end.
+
+%% @private Generate random inputs using the agent's cortex.
+-spec random_inputs_from_cortex(#agent{}, pos_integer()) -> [[float()]].
+random_inputs_from_cortex(Agent, NumSamples) ->
+    CortexId = Agent#agent.cx_id,
+    case genotype:read({cortex, CortexId}) of
+        undefined ->
+            lists:duplicate(NumSamples, [0.0]);
+        Cortex ->
+            random_inputs_from_sensors(Cortex, NumSamples)
+    end.
+
+%% @private Generate random inputs sized by the cortex's first sensor.
+-spec random_inputs_from_sensors(#cortex{}, pos_integer()) -> [[float()]].
+random_inputs_from_sensors(Cortex, NumSamples) ->
+    %% Get first sensor to determine input size
+    case Cortex#cortex.sensor_ids of
+        [] ->
+            lists:duplicate(NumSamples, [0.0]);
+        [FirstSensorId | _] ->
+            Sensor = genotype:read({sensor, FirstSensorId}),
+            VectorLength = Sensor#sensor.vl,
+
+            %% Generate random inputs
+            generate_random_vectors(VectorLength, NumSamples)
+    end.
+
+%% @private Generate NumSamples random vectors of the given length.
+-spec generate_random_vectors(non_neg_integer(), pos_integer()) -> [[float()]].
+generate_random_vectors(VectorLength, NumSamples) ->
+    lists:map(
+        fun(_) ->
+            [rand:uniform() || _ <- lists:seq(1, VectorLength)]
+        end,
+        lists:seq(1, NumSamples)
+    ).
 
 %% ============================================================================
 %% LTC-Aware Distance Functions
@@ -452,10 +472,7 @@ extract_ltc_signature_from_neurons(NeuronIds) ->
     %% Read all neurons and collect LTC data
     NeuronData = lists:filtermap(
         fun(NeuronId) ->
-            case genotype:read({neuron, NeuronId}) of
-                undefined -> false;
-                Neuron -> {true, extract_neuron_ltc_data(Neuron)}
-            end
+            neuron_ltc_data(NeuronId)
         end,
         NeuronIds
     ),
@@ -497,6 +514,14 @@ extract_ltc_signature_from_neurons(NeuronIds) ->
                 ltc_count => LtcCount,
                 total_count => TotalCount
             }
+    end.
+
+%% @private Read a neuron and extract its LTC data, dropping missing neurons.
+-spec neuron_ltc_data(term()) -> false | {true, map()}.
+neuron_ltc_data(NeuronId) ->
+    case genotype:read({neuron, NeuronId}) of
+        undefined -> false;
+        Neuron -> {true, extract_neuron_ltc_data(Neuron)}
     end.
 
 %% @private Extract LTC data from a single neuron.

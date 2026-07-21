@@ -116,14 +116,7 @@ cleanup(NetworkId) ->
 
     %% Leave any groups that belong to this network
     lists:foreach(
-        fun(Group) ->
-            case Group of
-                {network_pubsub, NetworkId, _Topic} ->
-                    pg:leave(?SCOPE, Group, self());
-                _ ->
-                    ok
-            end
-        end,
+        fun(Group) -> leave_if_network_group(NetworkId, Group) end,
         Groups
     ),
     ok.
@@ -183,12 +176,7 @@ list_topics(NetworkId) ->
 
     %% Filter to this network's groups and extract topics
     lists:filtermap(
-        fun(Group) ->
-            case Group of
-                {network_pubsub, NetworkId, Topic} -> {true, Topic};
-                _ -> false
-            end
-        end,
+        fun(Group) -> network_topic(NetworkId, Group) end,
         Groups
     ).
 
@@ -200,3 +188,19 @@ list_topics(NetworkId) ->
 -spec make_group(network_id(), event_type()) -> term().
 make_group(NetworkId, Topic) ->
     {network_pubsub, NetworkId, Topic}.
+
+%% @private Leave the group only if it belongs to this network
+leave_if_network_group(NetworkId, Group) ->
+    case Group of
+        {network_pubsub, NetworkId, _Topic} ->
+            pg:leave(?SCOPE, Group, self());
+        _ ->
+            ok
+    end.
+
+%% @private Extract the topic if the group belongs to this network
+network_topic(NetworkId, Group) ->
+    case Group of
+        {network_pubsub, NetworkId, Topic} -> {true, Topic};
+        _ -> false
+    end.

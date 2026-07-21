@@ -170,9 +170,7 @@ loop(State) ->
         %% range the exoself anneals down over attempts. Recompile the NIF
         %% weight cache so the perturbation actually takes effect.
         {perturb, Range} ->
-            PerturbedWeights = maps:map(
-                fun(_Pid, WSpecs) -> perturbation_utils:perturb_weights(WSpecs, Range) end,
-                State#state.input_weights),
+            PerturbedWeights = perturb_input_weights(State#state.input_weights, Range),
             PerturbedBias = perturbation_utils:sat(
                 State#state.bias + (rand:uniform() - 0.5) * Range, 3.1415926),
             Compiled = compile_weights_for_nif(
@@ -184,17 +182,7 @@ loop(State) ->
 
         %% Revert to the last backed-up weights (the perturbation was worse).
         restore ->
-            case State#state.saved_weights of
-                undefined ->
-                    loop(State);
-                Saved ->
-                    Bias = State#state.saved_bias,
-                    Compiled = compile_weights_for_nif(
-                        State#state.aggregation_function, State#state.input_pids,
-                        Saved, Bias),
-                    loop(State#state{input_weights = Saved, bias = Bias,
-                                     compiled_weights = Compiled})
-            end;
+            handle_restore(State);
 
         %% Event-driven: backup requested via pubsub
         {network_event, backup_requested, _Data} ->
@@ -276,19 +264,7 @@ loop(State) ->
         %% sends `reset' after every neuron has acked, so this neuron's seed
         %% cannot be flushed by a peer still in phase 1.
         {reset_prep, ExoSelfPid} ->
-            flush_forwards(),
-            ExoSelfPid ! {neuron_reset_ready, self()},
-            receive
-                reset ->
-                    seed_recurrent_inputs(State#state.ro_pids),
-                    loop(State#state{acc_input = #{}});
-                {cortex, terminate} ->
-                    handle_cleanup(State),
-                    ok;
-                terminate ->
-                    handle_cleanup(State),
-                    ok
-            end;
+            handle_reset_prep(ExoSelfPid, State);
 
         %% Catch-all: log and discard unexpected messages to prevent mailbox bloat
         UnexpectedMsg ->
@@ -297,6 +273,44 @@ loop(State) ->
             loop(State)
     after Timeout ->
         handle_input_timeout(State)
+    end.
+
+%% @private Jitter each input source's weight specs by the annealed range.
+perturb_input_weights(InputWeights, Range) ->
+    maps:map(
+        fun(_Pid, WSpecs) -> perturbation_utils:perturb_weights(WSpecs, Range) end,
+        InputWeights).
+
+%% @private Revert to the last backed-up weights and bias, recompiling the NIF
+%% cache so the restore takes effect. No-op when nothing was saved yet.
+handle_restore(State) ->
+    case State#state.saved_weights of
+        undefined ->
+            loop(State);
+        Saved ->
+            Bias = State#state.saved_bias,
+            Compiled = compile_weights_for_nif(
+                State#state.aggregation_function, State#state.input_pids,
+                Saved, Bias),
+            loop(State#state{input_weights = Saved, bias = Bias,
+                             compiled_weights = Compiled})
+    end.
+
+%% @private Two-phase evaluation reset. Flush stale forwards, ack, then on the
+%% follow-up message either re-seed recurrent targets (reset) or clean up.
+handle_reset_prep(ExoSelfPid, State) ->
+    flush_forwards(),
+    ExoSelfPid ! {neuron_reset_ready, self()},
+    receive
+        reset ->
+            seed_recurrent_inputs(State#state.ro_pids),
+            loop(State#state{acc_input = #{}});
+        {cortex, terminate} ->
+            handle_cleanup(State),
+            ok;
+        terminate ->
+            handle_cleanup(State),
+            ok
     end.
 
 %% @private Seed each recurrent-output target with a default [0.0] signal so it
@@ -384,14 +398,17 @@ is_ready(InputPids, AccInput) ->
 %% any buffered later-cycle signals.
 split_heads(InputPids, AccInput) ->
     lists:foldl(
-        fun(Pid, {Heads, Rem}) ->
-            case maps:get(Pid, AccInput, []) of
-                [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
-                [] -> {Heads, Rem}
-            end
-        end,
+        fun(Pid, Acc) -> split_head(Pid, AccInput, Acc) end,
         {#{}, #{}},
         InputPids).
+
+%% @private Take one signal from a single source's queue into the heads map,
+%% keeping the remainder for later cycles.
+split_head(Pid, AccInput, {Heads, Rem}) ->
+    case maps:get(Pid, AccInput, []) of
+        [H | T] -> {Heads#{Pid => H}, Rem#{Pid => T}};
+        [] -> {Heads, Rem}
+    end.
 
 process_and_forward(State) ->
     #state{

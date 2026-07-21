@@ -289,43 +289,55 @@ crossover_neurons_at_layer(Cortex, Neurons1, Neurons2, CrossoverRate) ->
     %% For each pair, perform neuron crossover
     lists:foreach(
         fun({N1Id, N2Id}) ->
-            N1 = genotype:read({neuron, N1Id}),
-            N2 = genotype:read({neuron, N2Id}),
-
-            case {N1, N2} of
-                {undefined, _} -> ok;
-                {_, undefined} -> ok;
-                {_, _} ->
-                    %% Perform crossover and update
-                    Crossed = neuron_crossover(N1, N2, CrossoverRate),
-
-                    %% Find corresponding neuron in offspring
-                    {{Layer, _}, neuron} = N1Id,
-                    OffspringNeurons = [
-                        NId || NId <- Cortex#cortex.neuron_ids,
-                        begin
-                            {{L, _}, neuron} = NId,
-                            L =:= Layer
-                        end
-                    ],
-
-                    %% Update first matching neuron
-                    case OffspringNeurons of
-                        [OffspringNId | _] ->
-                            OffspringN = genotype:read({neuron, OffspringNId}),
-                            UpdatedN = OffspringN#neuron{
-                                af = Crossed#neuron.af,
-                                aggr_f = Crossed#neuron.aggr_f
-                            },
-                            genotype:write(UpdatedN);
-                        [] ->
-                            ok
-                    end
-            end
+            apply_neuron_crossover(Cortex, N1Id, N2Id, CrossoverRate)
         end,
         Pairs
     ),
 
+    ok.
+
+%% @private Crossover a single neuron pair and update the offspring.
+-spec apply_neuron_crossover(#cortex{}, term(), term(), float()) -> ok.
+apply_neuron_crossover(Cortex, N1Id, N2Id, CrossoverRate) ->
+    N1 = genotype:read({neuron, N1Id}),
+    N2 = genotype:read({neuron, N2Id}),
+
+    case {N1, N2} of
+        {undefined, _} -> ok;
+        {_, undefined} -> ok;
+        {_, _} ->
+            %% Perform crossover and update
+            Crossed = neuron_crossover(N1, N2, CrossoverRate),
+
+            %% Find corresponding neuron in offspring
+            {{Layer, _}, neuron} = N1Id,
+            OffspringNeurons = offspring_neurons_at_layer(Cortex, Layer),
+
+            %% Update first matching neuron
+            update_first_offspring_neuron(OffspringNeurons, Crossed)
+    end.
+
+%% @private Find offspring neuron ids that live in the given layer.
+-spec offspring_neurons_at_layer(#cortex{}, float()) -> [term()].
+offspring_neurons_at_layer(Cortex, Layer) ->
+    [
+        NId || NId <- Cortex#cortex.neuron_ids,
+        begin
+            {{L, _}, neuron} = NId,
+            L =:= Layer
+        end
+    ].
+
+%% @private Update the first matching offspring neuron with crossed traits.
+-spec update_first_offspring_neuron([term()], #neuron{}) -> ok.
+update_first_offspring_neuron([OffspringNId | _], Crossed) ->
+    OffspringN = genotype:read({neuron, OffspringNId}),
+    UpdatedN = OffspringN#neuron{
+        af = Crossed#neuron.af,
+        aggr_f = Crossed#neuron.aggr_f
+    },
+    genotype:write(UpdatedN);
+update_first_offspring_neuron([], _Crossed) ->
     ok.
 
 %% ============================================================================
@@ -344,10 +356,7 @@ crossover_weight_vectors(W1, W2, CrossoverRate) ->
     Combined = lists:zipwith(
         fun({Weight1, DW1, LR1, P1}, {Weight2, _DW2, _LR2, _P2}) ->
             %% Choose weight based on crossover rate
-            NewWeight = case rand:uniform() < CrossoverRate of
-                true -> Weight1;
-                false -> Weight2
-            end,
+            NewWeight = select_weight_by_rate(Weight1, Weight2, CrossoverRate),
             {NewWeight, DW1, LR1, P1}
         end,
         lists:sublist(W1, NumWeights),
@@ -475,10 +484,7 @@ crossover_ltc_weights(W1, W2, CrossoverRate) ->
     %% Crossover matching weights
     Combined = lists:zipwith(
         fun(Weight1, Weight2) ->
-            case rand:uniform() < CrossoverRate of
-                true -> Weight1;
-                false -> Weight2
-            end
+            select_weight_by_rate(Weight1, Weight2, CrossoverRate)
         end,
         lists:sublist(W1, NumWeights),
         lists:sublist(W2, NumWeights)
@@ -487,6 +493,14 @@ crossover_ltc_weights(W1, W2, CrossoverRate) ->
     %% Add remaining weights from longer list
     Remaining = get_remaining_weights(W1, W2, NumWeights),
     Combined ++ Remaining.
+
+%% @private Select one of two weights based on the crossover rate.
+-spec select_weight_by_rate(T, T, float()) -> T.
+select_weight_by_rate(Weight1, Weight2, CrossoverRate) ->
+    case rand:uniform() < CrossoverRate of
+        true -> Weight1;
+        false -> Weight2
+    end.
 
 %% @private Get remaining weights from the longer list.
 -spec get_remaining_weights([float()], [float()], non_neg_integer()) -> [float()].

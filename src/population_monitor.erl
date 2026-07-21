@@ -285,11 +285,7 @@ handle_generation_complete(State) ->
     %% Update best fitness if improved
     UpdatedBestFitness = case State#population_state.current_best_fitness of
         undefined -> BestFitness;
-        CurrentBest ->
-            case fitness_improved(BestFitness, CurrentBest) of
-                true -> BestFitness;
-                false -> CurrentBest
-            end
+        CurrentBest -> better_fitness(BestFitness, CurrentBest)
     end,
 
     io:format("Best fitness this cohort: ~p (overall: ~p)~n",
@@ -363,25 +359,30 @@ spawn_agent(AgentId, State) ->
 
         {ok, ExoselfPid} = exoself:start(AgentId, MonitorPid, OpMode),
 
-        %% The scape drives a memetic tuning loop (up to 15 weight-perturbation
-        %% attempts per evaluation), so a single agent can take a while; 5s was
-        %% too tight and produced spurious [0.0]. 30s is comfortable.
-        receive
-            {exoself_terminated, Fitness, EvalCount} ->
-                population_monitor:agent_terminated(MonitorPid, AgentId,
-                                                    ensure_fitness_list(Fitness), EvalCount);
-            {'EXIT', ExoselfPid, normal} ->
-                %% Terminated cleanly without reporting (should not happen);
-                %% treat as no fitness.
-                population_monitor:agent_terminated(MonitorPid, AgentId, [0.0]);
-            {'EXIT', ExoselfPid, Reason} ->
-                tweann_logger:warning("Agent ~p died: ~p", [AgentId, Reason]),
-                population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
-        after 30000 ->
-            tweann_logger:warning("Agent ~p evaluation timeout after 30s", [AgentId]),
-            population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
-        end
+        await_agent_result(ExoselfPid, MonitorPid, AgentId)
     end).
+
+%% @private Await the exoself's fitness report, or handle its exit/timeout.
+%%
+%% The scape drives a memetic tuning loop (up to 15 weight-perturbation
+%% attempts per evaluation), so a single agent can take a while; 5s was
+%% too tight and produced spurious [0.0]. 30s is comfortable.
+await_agent_result(ExoselfPid, MonitorPid, AgentId) ->
+    receive
+        {exoself_terminated, Fitness, EvalCount} ->
+            population_monitor:agent_terminated(MonitorPid, AgentId,
+                                                ensure_fitness_list(Fitness), EvalCount);
+        {'EXIT', ExoselfPid, normal} ->
+            %% Terminated cleanly without reporting (should not happen);
+            %% treat as no fitness.
+            population_monitor:agent_terminated(MonitorPid, AgentId, [0.0]);
+        {'EXIT', ExoselfPid, Reason} ->
+            tweann_logger:warning("Agent ~p died: ~p", [AgentId, Reason]),
+            population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
+    after 30000 ->
+        tweann_logger:warning("Agent ~p evaluation timeout after 30s", [AgentId]),
+        population_monitor:agent_terminated(MonitorPid, AgentId, [0.0])
+    end.
 
 %% @private The population monitor works in vector fitness ([float()]); the
 %% exoself reports a scalar. Normalise so lists:sum and friends do not crash.
@@ -410,21 +411,27 @@ select_survivors(AgentFitnesses, SurvivalRate) ->
 %% @private Find best fitness in a list of fitness vectors
 -spec find_best_fitness([[float()]]) -> [float()].
 find_best_fitness([First | Rest]) ->
-    lists:foldl(
-        fun(F, BestSoFar) ->
-            case lists:sum(F) >= lists:sum(BestSoFar) of
-                true -> F;
-                false -> BestSoFar
-            end
-        end,
-        First,
-        Rest
-    ).
+    lists:foldl(fun keep_fitter/2, First, Rest).
+
+%% @private Keep whichever fitness vector has the greater sum
+keep_fitter(F, BestSoFar) ->
+    case lists:sum(F) >= lists:sum(BestSoFar) of
+        true -> F;
+        false -> BestSoFar
+    end.
 
 %% @private Check if fitness improved
 -spec fitness_improved([float()], [float()]) -> boolean().
 fitness_improved(NewFitness, OldFitness) ->
     (lists:sum(NewFitness) >= lists:sum(OldFitness)) andalso NewFitness =/= OldFitness.
+
+%% @private Keep the new fitness if it improved on the current best
+-spec better_fitness([float()], [float()]) -> [float()].
+better_fitness(BestFitness, CurrentBest) ->
+    case fitness_improved(BestFitness, CurrentBest) of
+        true -> BestFitness;
+        false -> CurrentBest
+    end.
 
 %% @private Reproduce population from survivors
 -spec reproduce_population([term()], pos_integer()) -> [term()].
@@ -481,11 +488,14 @@ goal_reached(State) ->
 completion_reason(State) ->
     case State#population_state.solved of
         true -> solved;
-        false ->
-            case goal_reached(State) of
-                true -> fitness_goal;
-                false -> max_generations
-            end
+        false -> unsolved_reason(State)
+    end.
+
+%% @private Reason a run ended without being marked solved
+unsolved_reason(State) ->
+    case goal_reached(State) of
+        true -> fitness_goal;
+        false -> max_generations
     end.
 
 %% @private Tell the configured observer the run is over.

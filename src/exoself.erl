@@ -405,65 +405,71 @@ link_neurons(State, Agent) ->
 
     lists:foreach(
         fun(NeuronId) ->
-            Neuron = genotype:dirty_read({neuron, NeuronId}),
-            [{NeuronId, NeuronPid}] = ets:lookup(IdMap, NeuronId),
-
-            %% `bias' is a constant input, not a process. Separate it from the
-            %% real inputs so it is not looked up as a pid (which would
-            %% badmatch []), and route its weight to the neuron's bias field.
-            {BiasWeight, RealInputIdps} = extract_bias(Neuron#neuron.input_idps),
-
-            %% Convert input IDs to PIDs
-            InputPids = [
-                begin
-                    [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
-                    InputPid
-                end
-                || {InputId, _Weights} <- RealInputIdps
-            ],
-
-            %% Build input weights map (PID -> weights)
-            InputWeights = maps:from_list([
-                begin
-                    [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
-                    {InputPid, Weights}
-                end
-                || {InputId, Weights} <- RealInputIdps
-            ]),
-
-            %% Partition outputs into feedforward and recurrent by layer (see
-            %% constructor:link_neurons/2). A target at the same or lower layer
-            %% is a feedback edge; the stored ro_ids is not trusted because
-            %% mutations do not maintain it. The sets are disjoint.
-            NeuronLayer = layer_of(Neuron#neuron.id),
-            {FeedforwardIds, RecurrentIds} = lists:partition(
-                fun(Id) -> layer_of(Id) > NeuronLayer end,
-                Neuron#neuron.output_ids
-            ),
-            OutputPids = [
-                begin
-                    [{FfId, FfPid}] = ets:lookup(IdMap, FfId),
-                    FfPid
-                end
-                || FfId <- FeedforwardIds
-            ],
-            ROPids = [
-                begin
-                    [{ROId, ROPid}] = ets:lookup(IdMap, ROId),
-                    ROPid
-                end
-                || ROId <- RecurrentIds
-            ],
-
-            %% Send link messages to neuron
-            NeuronPid ! {link, input_pids, InputPids},
-            NeuronPid ! {link, output_pids, OutputPids},
-            NeuronPid ! {link, ro_pids, ROPids},
-            NeuronPid ! {link, input_weights, InputWeights},
-            NeuronPid ! {link, bias, BiasWeight}
+            link_one_neuron(IdMap, NeuronId)
         end,
         Cortex#cortex.neuron_ids
     ).
+
+%% @private Wire a single neuron to its inputs, outputs, weights and bias.
+-spec link_one_neuron(ets:tid(), term()) -> ok.
+link_one_neuron(IdMap, NeuronId) ->
+    Neuron = genotype:dirty_read({neuron, NeuronId}),
+    [{NeuronId, NeuronPid}] = ets:lookup(IdMap, NeuronId),
+
+    %% `bias' is a constant input, not a process. Separate it from the
+    %% real inputs so it is not looked up as a pid (which would
+    %% badmatch []), and route its weight to the neuron's bias field.
+    {BiasWeight, RealInputIdps} = extract_bias(Neuron#neuron.input_idps),
+
+    %% Convert input IDs to PIDs
+    InputPids = [
+        begin
+            [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
+            InputPid
+        end
+        || {InputId, _Weights} <- RealInputIdps
+    ],
+
+    %% Build input weights map (PID -> weights)
+    InputWeights = maps:from_list([
+        begin
+            [{InputId, InputPid}] = ets:lookup(IdMap, InputId),
+            {InputPid, Weights}
+        end
+        || {InputId, Weights} <- RealInputIdps
+    ]),
+
+    %% Partition outputs into feedforward and recurrent by layer (see
+    %% constructor:link_neurons/2). A target at the same or lower layer
+    %% is a feedback edge; the stored ro_ids is not trusted because
+    %% mutations do not maintain it. The sets are disjoint.
+    NeuronLayer = layer_of(Neuron#neuron.id),
+    {FeedforwardIds, RecurrentIds} = lists:partition(
+        fun(Id) -> layer_of(Id) > NeuronLayer end,
+        Neuron#neuron.output_ids
+    ),
+    OutputPids = [
+        begin
+            [{FfId, FfPid}] = ets:lookup(IdMap, FfId),
+            FfPid
+        end
+        || FfId <- FeedforwardIds
+    ],
+    ROPids = [
+        begin
+            [{ROId, ROPid}] = ets:lookup(IdMap, ROId),
+            ROPid
+        end
+        || ROId <- RecurrentIds
+    ],
+
+    %% Send link messages to neuron
+    NeuronPid ! {link, input_pids, InputPids},
+    NeuronPid ! {link, output_pids, OutputPids},
+    NeuronPid ! {link, ro_pids, ROPids},
+    NeuronPid ! {link, input_weights, InputWeights},
+    NeuronPid ! {link, bias, BiasWeight},
+    ok.
 
 %% @private Layer coordinate of an id {{Layer, Unique}, Type}.
 -spec layer_of(term()) -> number().
@@ -500,11 +506,11 @@ link_actuators(State, Agent, CortexPid) ->
 loop(State) ->
     #exoself_state{
         agent_id = AgentId,
-        cortex_pid = CortexPid,
+        cortex_pid = _CortexPid,
         population_monitor_pid = PopMonitorPid,
         highest_fitness = HighestFitness,
-        current_attempt = CurrentAttempt,
-        max_attempts = MaxAttempts,
+        current_attempt = _CurrentAttempt,
+        max_attempts = _MaxAttempts,
         evaluation_count = EvalCount
     } = State,
 
@@ -520,13 +526,7 @@ loop(State) ->
 
         {cortex, _CxId, max_cycles_reached, _CycleCount} ->
             %% Evaluation complete, report to population monitor
-            case PopMonitorPid of
-                undefined ->
-                    ok;
-                _ ->
-                    PopMonitorPid ! {self(), AgentId, EvalCount, HighestFitness}
-            end,
-            terminate_network(State);
+            report_and_terminate(PopMonitorPid, AgentId, EvalCount, HighestFitness, State);
 
         {population_monitor, terminate} ->
             terminate_network(State);
@@ -536,20 +536,43 @@ loop(State) ->
 
         {population_monitor, continue} ->
             %% Continue with next tuning attempt
-            case CurrentAttempt < MaxAttempts of
-                true ->
-                    reset_neurons(State),
-                    perturb_weights(State),
-                    cortex:sync(CortexPid),
-                    loop(State#exoself_state{current_attempt = CurrentAttempt + 1});
-                false ->
-                    %% Max attempts reached
-                    case PopMonitorPid of
-                        undefined -> ok;
-                        _ -> PopMonitorPid ! {self(), AgentId, EvalCount, HighestFitness}
-                    end,
-                    terminate_network(State)
-            end
+            handle_continue(State)
+    end.
+
+%% @private Report the best fitness to the population monitor (if any) and
+%% tear down the phenotype.
+-spec report_and_terminate(pid() | undefined, term(), non_neg_integer(),
+                           number() | undefined, #exoself_state{}) -> ok.
+report_and_terminate(PopMonitorPid, AgentId, EvalCount, HighestFitness, State) ->
+    case PopMonitorPid of
+        undefined ->
+            ok;
+        _ ->
+            PopMonitorPid ! {self(), AgentId, EvalCount, HighestFitness}
+    end,
+    terminate_network(State).
+
+%% @private Run the next tuning attempt, or finish when max attempts reached.
+-spec handle_continue(#exoself_state{}) -> ok.
+handle_continue(State) ->
+    #exoself_state{
+        agent_id = AgentId,
+        cortex_pid = CortexPid,
+        population_monitor_pid = PopMonitorPid,
+        highest_fitness = HighestFitness,
+        current_attempt = CurrentAttempt,
+        max_attempts = MaxAttempts,
+        evaluation_count = EvalCount
+    } = State,
+    case CurrentAttempt < MaxAttempts of
+        true ->
+            reset_neurons(State),
+            perturb_weights(State),
+            cortex:sync(CortexPid),
+            loop(State#exoself_state{current_attempt = CurrentAttempt + 1});
+        false ->
+            %% Max attempts reached
+            report_and_terminate(PopMonitorPid, AgentId, EvalCount, HighestFitness, State)
     end.
 
 %% @private Handle evaluation completion.
@@ -697,13 +720,18 @@ perturb_weights(State) ->
     Chosen = tuning_selection:select(Strategy, NeuronIds, Generation, Range, AnnealingParam),
     lists:foreach(
         fun({NeuronId, Spread}) ->
-            case ets:lookup(IdMap, NeuronId) of
-                [{NeuronId, Pid}] -> Pid ! {perturb, Spread};
-                [] -> ok
-            end
+            perturb_neuron(IdMap, NeuronId, Spread)
         end,
         Chosen),
     ok.
+
+%% @private Send a perturb message to a neuron's process, if it is registered.
+-spec perturb_neuron(ets:tid(), term(), float()) -> ok | {perturb, float()}.
+perturb_neuron(IdMap, NeuronId, Spread) ->
+    case ets:lookup(IdMap, NeuronId) of
+        [{NeuronId, Pid}] -> Pid ! {perturb, Spread};
+        [] -> ok
+    end.
 
 %% @private Backup current weights from all neurons.
 -spec backup_weights(#exoself_state{}) -> ok.
@@ -745,23 +773,28 @@ terminate_network(State) ->
         undefined ->
             ok;
         _ ->
-            %% Monitor cortex before terminating
-            Ref = erlang:monitor(process, CortexPid),
-            cortex:terminate(CortexPid),
-            %% Wait for cortex to finish (with timeout)
-            receive
-                {'DOWN', Ref, process, CortexPid, _Reason} ->
-                    ok
-            after 5000 ->
-                %% Timeout - demonitor and continue (don't force-kill to avoid cascading failures)
-                erlang:demonitor(Ref, [flush]),
-                tweann_logger:warning("Exoself: cortex ~p did not terminate within 5s", [CortexPid])
-            end
+            await_cortex_termination(CortexPid)
     end,
 
     %% Clean up ETS table
     ets:delete(IdMap),
     ok.
+
+%% @private Terminate the cortex and wait (bounded) for it to go down.
+-spec await_cortex_termination(pid()) -> ok.
+await_cortex_termination(CortexPid) ->
+    %% Monitor cortex before terminating
+    Ref = erlang:monitor(process, CortexPid),
+    cortex:terminate(CortexPid),
+    %% Wait for cortex to finish (with timeout)
+    receive
+        {'DOWN', Ref, process, CortexPid, _Reason} ->
+            ok
+    after 5000 ->
+        %% Timeout - demonitor and continue (don't force-kill to avoid cascading failures)
+        erlang:demonitor(Ref, [flush]),
+        tweann_logger:warning("Exoself: cortex ~p did not terminate within 5s", [CortexPid])
+    end.
 
 %% @doc Calculate perturbation for current attempt using annealing.
 %%

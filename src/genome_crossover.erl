@@ -184,30 +184,34 @@ categorize_genes(Sorted1, Sorted2, Map1, Map2, Max1, Max2) ->
     ),
 
     lists:foldl(
-        fun(Inn, {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}) ->
-            case {maps:get(Inn, Map1, undefined), maps:get(Inn, Map2, undefined)} of
-                {G1, G2} when G1 =/= undefined, G2 =/= undefined ->
-                    %% Matching gene
-                    {[{G1, G2} | MatchAcc], Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc};
-
-                {G1, undefined} when G1 =/= undefined ->
-                    %% Only in genome 1
-                    categorize_single_gene(Inn, G1, Max2,
-                        {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}, 1);
-
-                {undefined, G2} when G2 =/= undefined ->
-                    %% Only in genome 2
-                    categorize_single_gene(Inn, G2, Max1,
-                        {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}, 2);
-
-                _ ->
-                    %% Shouldn't happen
-                    {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}
-            end
+        fun(Inn, Acc) ->
+            categorize_innovation(Inn, Map1, Map2, Max1, Max2, Acc)
         end,
         {[], [], [], [], []},
         AllInnovations
     ).
+
+categorize_innovation(Inn, Map1, Map2, Max1, Max2,
+                      {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}) ->
+    case {maps:get(Inn, Map1, undefined), maps:get(Inn, Map2, undefined)} of
+        {G1, G2} when G1 =/= undefined, G2 =/= undefined ->
+            %% Matching gene
+            {[{G1, G2} | MatchAcc], Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc};
+
+        {G1, undefined} when G1 =/= undefined ->
+            %% Only in genome 1
+            categorize_single_gene(Inn, G1, Max2,
+                {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}, 1);
+
+        {undefined, G2} when G2 =/= undefined ->
+            %% Only in genome 2
+            categorize_single_gene(Inn, G2, Max1,
+                {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}, 2);
+
+        _ ->
+            %% Shouldn't happen
+            {MatchAcc, Dis1Acc, Dis2Acc, Exc1Acc, Exc2Acc}
+    end.
 
 categorize_single_gene(Inn, Gene, OtherMax, {Match, Dis1, Dis2, Exc1, Exc2}, WhichGenome) ->
     case {Inn > OtherMax, WhichGenome} of
@@ -255,10 +259,7 @@ extract_neuron_input_genes(Neuron) ->
         fun({FromId, Weights}) when FromId =/= bias ->
             %% Get or create innovation for this link
             Innovation = innovation:get_or_create_link_innovation(FromId, ToId),
-            Weight = case Weights of
-                [W | _] -> extract_weight_value(W);
-                _ -> 0.0
-            end,
+            Weight = first_weight_value(Weights),
             {true, #connection_gene{
                 innovation = Innovation,
                 from_id = FromId,
@@ -291,3 +292,6 @@ extract_actuator_input_genes(Actuator) ->
 extract_weight_value({W, _DW, _LR, _Params}) when is_number(W) -> W;
 extract_weight_value(W) when is_number(W) -> W;
 extract_weight_value(_) -> 0.0.
+
+first_weight_value([W | _]) -> extract_weight_value(W);
+first_weight_value(_) -> 0.0.

@@ -229,12 +229,7 @@ handle_sync(State) ->
             });
         false ->
             %% Legacy: direct message to sensors
-            lists:foreach(
-                fun(SensorPid) ->
-                    SensorPid ! {cortex, sync}
-                end,
-                SensorPids
-            )
+            sync_sensors(SensorPids)
     end,
 
     %% Reset cycle accumulator
@@ -242,6 +237,15 @@ handle_sync(State) ->
         cycle_acc = [],
         cycle_count = NewCycleCount
     }.
+
+%% @private Signal each sensor to begin a cycle (legacy direct-message mode).
+sync_sensors(SensorPids) ->
+    lists:foreach(
+        fun(SensorPid) ->
+            SensorPid ! {cortex, sync}
+        end,
+        SensorPids
+    ).
 
 handle_actuator_output(Output, Fitness, HaltFlag, State) ->
     #state{
@@ -354,13 +358,17 @@ handle_backup(State) ->
             });
         false ->
             %% Legacy: direct message to neurons
-            lists:foreach(
-                fun(NeuronPid) ->
-                    neuron:backup(NeuronPid)
-                end,
-                NeuronPids
-            )
+            backup_neurons(NeuronPids)
     end.
+
+%% @private Request a weight backup from each neuron (legacy direct-message mode).
+backup_neurons(NeuronPids) ->
+    lists:foreach(
+        fun(NeuronPid) ->
+            neuron:backup(NeuronPid)
+        end,
+        NeuronPids
+    ).
 
 handle_neuron_backup(NeuronId, Weights, Bias, State) ->
     #state{
@@ -406,33 +414,22 @@ handle_terminate(State) ->
             network_pubsub:cleanup(Id);
         false ->
             %% Legacy: direct messages to all components
-            %% Terminate all sensors
-            lists:foreach(
-                fun(SensorPid) ->
-                    SensorPid ! {cortex, terminate}
-                end,
-                SensorPids
-            ),
-
-            %% Terminate all neurons
-            lists:foreach(
-                fun(NeuronPid) ->
-                    NeuronPid ! {cortex, terminate}
-                end,
-                NeuronPids
-            ),
-
-            %% Terminate all actuators
-            lists:foreach(
-                fun(ActuatorPid) ->
-                    ActuatorPid ! {cortex, terminate}
-                end,
-                ActuatorPids
-            )
+            terminate_components(SensorPids),
+            terminate_components(NeuronPids),
+            terminate_components(ActuatorPids)
     end,
 
     %% Wait for all processes to terminate (with timeout per process)
     wait_for_terminations(Monitors, 2000).
+
+%% @private Send a terminate message to each component PID (legacy mode).
+terminate_components(Pids) ->
+    lists:foreach(
+        fun(Pid) ->
+            Pid ! {cortex, terminate}
+        end,
+        Pids
+    ).
 
 %% @private Wait for all monitored processes to terminate
 wait_for_terminations([], _Timeout) ->

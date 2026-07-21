@@ -90,10 +90,7 @@ act(_ActuatorName, _Params, [Output], #state{current = {_Inputs, Target}} = S) -
             %% Last case: report fitness and halt.
             Rmse = math:sqrt(Sse / length(?CASES)),
             Fitness = 1.0 / (Rmse + ?EPSILON),
-            HaltFlag = case Correct =:= length(?CASES) of
-                           true  -> goal_reached;
-                           false -> 1
-                       end,
+            HaltFlag = halt_flag(Correct),
             {Fitness, HaltFlag, #state{}};
         _ ->
             %% More cases pending: no fitness yet, clear current so the next
@@ -104,3 +101,10 @@ act(_ActuatorName, _Params, Output, S) ->
     %% Wrong output arity is a genotype/morphology mismatch, not a runtime
     %% condition to absorb. Fail loudly.
     erlang:error({xor_sim_expected_one_output, Output, S}).
+
+%% @private goal_reached once every case is correct, otherwise keep evaluating.
+halt_flag(Correct) ->
+    case Correct =:= length(?CASES) of
+        true  -> goal_reached;
+        false -> 1
+    end.

@@ -50,24 +50,26 @@ wsize_proportional(Power, NIds, Generation) ->
 
 recent_neuron_ids(NIds, Generation, AgeLimit) ->
     lists:filter(
-        fun(NId) ->
-            case genotype:dirty_read({neuron, NId}) of
-                undefined -> false;
-                N -> N#neuron.generation >= (Generation - AgeLimit)
-            end
-        end,
+        fun(NId) -> is_recent_neuron(NId, Generation, AgeLimit) end,
         NIds).
+
+is_recent_neuron(NId, Generation, AgeLimit) ->
+    case genotype:dirty_read({neuron, NId}) of
+        undefined -> false;
+        N -> N#neuron.generation >= (Generation - AgeLimit)
+    end.
 
 total_weight_count(NIds) ->
     lists:foldl(
-        fun(NId, Acc) ->
-            case genotype:dirty_read({neuron, NId}) of
-                undefined -> Acc;
-                N -> Acc + input_weight_count(N#neuron.input_idps)
-            end
-        end,
+        fun(NId, Acc) -> add_neuron_weight_count(NId, Acc) end,
         0,
         NIds).
+
+add_neuron_weight_count(NId, Acc) ->
+    case genotype:dirty_read({neuron, NId}) of
+        undefined -> Acc;
+        N -> Acc + input_weight_count(N#neuron.input_idps)
+    end.
 
 %% Each input_idp is {SourceId, WeightList}; bias contributes one weight too.
 input_weight_count(InputIdps) ->

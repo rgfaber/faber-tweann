@@ -89,35 +89,33 @@ init_db() ->
     %% Create ETS tables for each record type
     Tables = [agent, cortex, sensor, actuator, neuron, substrate, specie, population],
 
-    lists:foreach(
-        fun(Name) ->
-            case ets:whereis(Name) of
-                undefined ->
-                    ets:new(Name, [set, public, named_table, {keypos, 2},
-                                   {read_concurrency, true}]);
-                _Tid ->
-                    %% Table already exists
-                    ok
-            end
-        end,
-        Tables
-    ),
+    lists:foreach(fun ensure_table/1, Tables),
     ok.
+
+%% @private Create an ETS table if it does not already exist.
+ensure_table(Name) ->
+    case ets:whereis(Name) of
+        undefined ->
+            ets:new(Name, [set, public, named_table, {keypos, 2},
+                           {read_concurrency, true}]);
+        _Tid ->
+            %% Table already exists
+            ok
+    end.
 
 %% @doc Reset database by clearing all tables.
 -spec reset_db() -> ok.
 reset_db() ->
     Tables = [agent, cortex, sensor, actuator, neuron, substrate, specie, population],
-    lists:foreach(
-        fun(Table) ->
-            case ets:whereis(Table) of
-                undefined -> ok;
-                _Tid -> ets:delete_all_objects(Table)
-            end
-        end,
-        Tables
-    ),
+    lists:foreach(fun clear_table/1, Tables),
     ok.
+
+%% @private Clear all objects from an ETS table if it exists.
+clear_table(Table) ->
+    case ets:whereis(Table) of
+        undefined -> ok;
+        _Tid -> ets:delete_all_objects(Table)
+    end.
 
 %%==============================================================================
 %% Core Operations
@@ -442,20 +440,25 @@ delete_Agent(Agent_Id) ->
     Agent = dirty_read({agent, Agent_Id}),
     case Agent of
         undefined -> ok;
-        _ ->
-            Cortex = dirty_read({cortex, Agent#agent.cx_id}),
-            case Cortex of
-                undefined -> ok;
-                _ ->
-                    %% Delete all components
-                    [delete({sensor, Id}) || Id <- Cortex#cortex.sensor_ids],
-                    [delete({neuron, Id}) || Id <- Cortex#cortex.neuron_ids],
-                    [delete({actuator, Id}) || Id <- Cortex#cortex.actuator_ids],
-                    delete({cortex, Cortex#cortex.id})
-            end,
-            delete({agent, Agent_Id})
+        _ -> delete_agent_and_components(Agent, Agent_Id)
     end,
     ok.
+
+%% @private Delete an agent's cortex components and the agent record itself.
+delete_agent_and_components(Agent, Agent_Id) ->
+    Cortex = dirty_read({cortex, Agent#agent.cx_id}),
+    delete_cortex_components(Cortex),
+    delete({agent, Agent_Id}).
+
+%% @private Delete a cortex and all its sensors, neurons, and actuators.
+delete_cortex_components(undefined) ->
+    ok;
+delete_cortex_components(Cortex) ->
+    %% Delete all components
+    [delete({sensor, Id}) || Id <- Cortex#cortex.sensor_ids],
+    [delete({neuron, Id}) || Id <- Cortex#cortex.neuron_ids],
+    [delete({actuator, Id}) || Id <- Cortex#cortex.actuator_ids],
+    delete({cortex, Cortex#cortex.id}).
 
 %%==============================================================================
 %% Utility Functions
@@ -558,19 +561,8 @@ clone_elements(Type, Ids, NewCx_Id) ->
     lists:foldl(
         fun(OldId, {AccIds, AccMap}) ->
             Record = dirty_read({Type, OldId}),
-            NewId = case Type of
-                sensor -> {{-1, generate_UniqueId()}, sensor};
-                neuron ->
-                    {{Layer, _}, _} = OldId,
-                    {{Layer, generate_UniqueId()}, neuron};
-                actuator -> {{1, generate_UniqueId()}, actuator}
-            end,
-
-            NewRecord = case Type of
-                sensor -> Record#sensor{id = NewId, cx_id = NewCx_Id};
-                neuron -> Record#neuron{id = NewId, cx_id = NewCx_Id};
-                actuator -> Record#actuator{id = NewId, cx_id = NewCx_Id}
-            end,
+            NewId = clone_new_id(Type, OldId),
+            NewRecord = clone_new_record(Type, Record, NewId, NewCx_Id),
             write(NewRecord),
 
             {AccIds ++ [NewId], AccMap#{OldId => NewId}}
@@ -578,6 +570,23 @@ clone_elements(Type, Ids, NewCx_Id) ->
         {[], #{}},
         Ids
     ).
+
+%% @private Generate a remapped ID for a cloned element, preserving neuron layer.
+clone_new_id(sensor, _OldId) ->
+    {{-1, generate_UniqueId()}, sensor};
+clone_new_id(neuron, OldId) ->
+    {{Layer, _}, _} = OldId,
+    {{Layer, generate_UniqueId()}, neuron};
+clone_new_id(actuator, _OldId) ->
+    {{1, generate_UniqueId()}, actuator}.
+
+%% @private Apply the new ID and cortex ID to a cloned element record.
+clone_new_record(sensor, Record, NewId, NewCx_Id) ->
+    Record#sensor{id = NewId, cx_id = NewCx_Id};
+clone_new_record(neuron, Record, NewId, NewCx_Id) ->
+    Record#neuron{id = NewId, cx_id = NewCx_Id};
+clone_new_record(actuator, Record, NewId, NewCx_Id) ->
+    Record#actuator{id = NewId, cx_id = NewCx_Id}.
 
 %% Update cloned elements with remapped IDs
 update_cloned_elements(sensor, Ids, IdMap) ->

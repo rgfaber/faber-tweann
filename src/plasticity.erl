@@ -141,17 +141,23 @@ apply_to_layer(RuleModule, LayerWeights, PreActivations, PostActivity) ->
 apply_to_layer(RuleModule, LayerWeights, PreActivations, PostActivity, Reward) ->
     lists:zipwith(
         fun({SourceId, Weights}, PreActs) ->
-            UpdatedWeights = lists:zipwith(
-                fun(Weight, PreAct) ->
-                    apply_to_weights(RuleModule, Weight, PreAct, PostActivity, Reward)
-                end,
-                Weights,
-                PreActs
+            UpdatedWeights = apply_to_source_weights(
+                RuleModule, Weights, PreActs, PostActivity, Reward
             ),
             {SourceId, UpdatedWeights}
         end,
         LayerWeights,
         PreActivations
+    ).
+
+%% @private Apply the rule to every weight of a single source connection.
+apply_to_source_weights(RuleModule, Weights, PreActs, PostActivity, Reward) ->
+    lists:zipwith(
+        fun(Weight, PreAct) ->
+            apply_to_weights(RuleModule, Weight, PreAct, PostActivity, Reward)
+        end,
+        Weights,
+        PreActs
     ).
 
 %% @doc Apply a plasticity rule to an entire network's weights.
@@ -174,23 +180,32 @@ apply_to_network(RuleAtom, AllWeights, AllActivations, Reward) ->
     %% and post-activations (current layer output)
     lists:zipwith3(
         fun(LayerIdx, LayerWeights, PostActivations) ->
-            PreActivations = case LayerIdx of
-                1 -> hd(AllActivations);  %% Input activations for first layer
-                _ -> lists:nth(LayerIdx - 1, AllActivations)
-            end,
+            PreActivations = pre_activations(LayerIdx, AllActivations),
 
             %% Apply to each neuron in the layer
-            lists:zipwith(
-                fun(NeuronWeights, PostAct) ->
-                    apply_to_layer(RuleModule, NeuronWeights, [PreActivations], PostAct, Reward)
-                end,
-                LayerWeights,
-                PostActivations
+            apply_to_layer_neurons(
+                RuleModule, LayerWeights, PreActivations, PostActivations, Reward
             )
         end,
         lists:seq(1, NumLayers),
         AllWeights,
         tl(AllActivations)  %% Skip input layer for output activations
+    ).
+
+%% @private Select the presynaptic activations for a layer.
+pre_activations(1, AllActivations) ->
+    hd(AllActivations);  %% Input activations for first layer
+pre_activations(LayerIdx, AllActivations) ->
+    lists:nth(LayerIdx - 1, AllActivations).
+
+%% @private Apply the rule to every neuron in one layer.
+apply_to_layer_neurons(RuleModule, LayerWeights, PreActivations, PostActivations, Reward) ->
+    lists:zipwith(
+        fun(NeuronWeights, PostAct) ->
+            apply_to_layer(RuleModule, NeuronWeights, [PreActivations], PostAct, Reward)
+        end,
+        LayerWeights,
+        PostActivations
     ).
 
 %%==============================================================================

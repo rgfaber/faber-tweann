@@ -152,18 +152,22 @@ require_nif() ->
                  "implementation deliberately."}
             );
         _ ->
-            case faber_nn_nifs:is_loaded() of
-                true ->
-                    faber_nn_nifs;
-                false ->
-                    erlang:error(
-                        {faber_nn_nifs_not_loaded,
-                         "The faber_nn_nifs module is present but its shared library "
-                         "failed to load. Check priv/libfaber_nn_nifs.so, or set "
-                         "{faber_tweann, [{nif_impl, fallback}]} to use the pure "
-                         "Erlang implementation deliberately."}
-                    )
-            end
+            require_nif_loaded()
+    end.
+
+%% @private
+require_nif_loaded() ->
+    case faber_nn_nifs:is_loaded() of
+        true ->
+            faber_nn_nifs;
+        false ->
+            erlang:error(
+                {faber_nn_nifs_not_loaded,
+                 "The faber_nn_nifs module is present but its shared library "
+                 "failed to load. Check priv/libfaber_nn_nifs.so, or set "
+                 "{faber_tweann, [{nif_impl, fallback}]} to use the pure "
+                 "Erlang implementation deliberately."}
+            )
     end.
 
 %% @private

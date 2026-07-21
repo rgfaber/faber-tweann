@@ -139,12 +139,7 @@ init() ->
         {error, bad_name} ->
             %% Application not in the code path yet (e.g. during eunit before
             %% the .app is loaded). Locate priv relative to this beam file.
-            case code:which(?MODULE) of
-                Filename when is_list(Filename) ->
-                    filename:join([filename:dirname(Filename), "..", "priv"]);
-                _ ->
-                    "priv"
-            end;
+            locate_priv_dir();
         Dir ->
             Dir
     end,
@@ -153,6 +148,15 @@ init() ->
         ok -> ok;
         {error, {reload, _}} -> ok;  %% Already loaded
         {error, Reason} -> {error, Reason}
+    end.
+
+%% @private Locate priv relative to this beam file when the app is not yet loaded.
+locate_priv_dir() ->
+    case code:which(?MODULE) of
+        Filename when is_list(Filename) ->
+            filename:join([filename:dirname(Filename), "..", "priv"]);
+        _ ->
+            "priv"
     end.
 
 %% @doc Check if NIF is loaded successfully.

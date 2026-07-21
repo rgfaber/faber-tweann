@@ -81,38 +81,42 @@ compile_network(Nodes, InputCount, OutputIndices) ->
 evaluate(#{nodes := _Nodes, input_count := InputCount, output_indices := OutputIndices, node_list := NodeList}, Inputs) ->
     case length(Inputs) of
         InputCount ->
-            %% Initialize activations with inputs
-            InitActivations = maps:from_list(lists:zip(lists:seq(0, InputCount - 1), Inputs)),
-            %% Forward propagate through nodes in order
-            FinalActivations = lists:foldl(
-                fun({Idx, Type, Activation, Bias, Connections}, Acc) ->
-                    case Type of
-                        input -> Acc;  %% Already initialized
-                        _ ->
-                            %% Compute weighted sum
-                            Sum = lists:foldl(
-                                fun({FromIdx, Weight}, S) ->
-                                    FromVal = maps:get(FromIdx, Acc, 0.0),
-                                    S + FromVal * Weight
-                                end,
-                                Bias,
-                                Connections
-                            ),
-                            %% Apply activation
-                            Output = apply_activation(Activation, Sum),
-                            maps:put(Idx, Output, Acc)
-                    end
-                end,
-                InitActivations,
-                NodeList
-            ),
-            %% Extract outputs
-            [maps:get(Idx, FinalActivations, 0.0) || Idx <- OutputIndices];
+            forward_propagate(InputCount, OutputIndices, NodeList, Inputs);
         _ ->
             []  %% Wrong input count
     end;
 evaluate(_, _) ->
     [].
+
+%% @private Forward propagate inputs through the network node list.
+forward_propagate(InputCount, OutputIndices, NodeList, Inputs) ->
+    %% Initialize activations with inputs
+    InitActivations = maps:from_list(lists:zip(lists:seq(0, InputCount - 1), Inputs)),
+    %% Forward propagate through nodes in order
+    FinalActivations = lists:foldl(
+        fun(Node, Acc) -> evaluate_node(Node, Acc) end,
+        InitActivations,
+        NodeList
+    ),
+    %% Extract outputs
+    [maps:get(Idx, FinalActivations, 0.0) || Idx <- OutputIndices].
+
+%% @private Compute a single node's activation and store it in the accumulator.
+evaluate_node({_Idx, input, _Activation, _Bias, _Connections}, Acc) ->
+    Acc;  %% Already initialized
+evaluate_node({Idx, _Type, Activation, Bias, Connections}, Acc) ->
+    %% Compute weighted sum
+    Sum = lists:foldl(
+        fun({FromIdx, Weight}, S) ->
+            FromVal = maps:get(FromIdx, Acc, 0.0),
+            S + FromVal * Weight
+        end,
+        Bias,
+        Connections
+    ),
+    %% Apply activation
+    Output = apply_activation(Activation, Sum),
+    maps:put(Idx, Output, Acc).
 
 %% @doc Batch evaluate network.
 -spec evaluate_batch(map(), [[float()]]) -> [[float()]].
@@ -129,13 +133,7 @@ compatibility_distance(ConnectionsA, ConnectionsB, C1, C2, C3) ->
     N = max(1, max(length(ConnectionsA), length(ConnectionsB))),
 
     {Matching, Disjoint, Excess, WeightDiff} = lists:foldl(
-        fun(Inn, {M, D, E, W}) ->
-            case {maps:get(Inn, MapA, undefined), maps:get(Inn, MapB, undefined)} of
-                {undefined, _} -> {M, D + 1, E, W};
-                {_, undefined} -> {M, D + 1, E, W};
-                {WA, WB} -> {M + 1, D, E, W + abs(WA - WB)}
-            end
-        end,
+        fun(Inn, Acc) -> classify_innovation(Inn, MapA, MapB, Acc) end,
         {0, 0, 0, 0.0},
         AllInnovations
     ),
@@ -146,6 +144,14 @@ compatibility_distance(ConnectionsA, ConnectionsB, C1, C2, C3) ->
     end,
 
     (C1 * Excess / N) + (C2 * Disjoint / N) + (C3 * AvgWeightDiff).
+
+%% @private Classify a single innovation as matching, disjoint or excess.
+classify_innovation(Inn, MapA, MapB, {M, D, E, W}) ->
+    case {maps:get(Inn, MapA, undefined), maps:get(Inn, MapB, undefined)} of
+        {undefined, _} -> {M, D + 1, E, W};
+        {_, undefined} -> {M, D + 1, E, W};
+        {WA, WB} -> {M + 1, D, E, W + abs(WA - WB)}
+    end.
 
 %% @doc Benchmark evaluate (returns microseconds per evaluation).
 -spec benchmark_evaluate(map(), [float()], pos_integer()) -> float().
@@ -397,16 +403,19 @@ shannon_entropy(Values) ->
     Total = lists:sum(Positive),
     case Total > 0 of
         false -> 0.0;
-        true ->
-            lists:foldl(
-                fun(V, Acc) ->
-                    P = V / Total,
-                    Acc - P * math:log(P)
-                end,
-                0.0,
-                Positive
-            )
+        true -> sum_entropy(Positive, Total)
     end.
+
+%% @private Accumulate Shannon entropy contributions.
+sum_entropy(Positive, Total) ->
+    lists:foldl(
+        fun(V, Acc) ->
+            P = V / Total,
+            Acc - P * math:log(P)
+        end,
+        0.0,
+        Positive
+    ).
 
 %% @doc Histogram binning.
 -spec histogram([float()], pos_integer(), float(), float()) -> [non_neg_integer()].
@@ -414,22 +423,30 @@ histogram(Values, NumBins, MinVal, MaxVal) ->
     Range = MaxVal - MinVal,
     case Range > 0 andalso NumBins > 0 of
         false -> lists:duplicate(NumBins, 0);
-        true ->
-            BinWidth = Range / NumBins,
-            Bins = lists:foldl(
-                fun(V, Acc) ->
-                    case V >= MinVal andalso V =< MaxVal of
-                        false -> Acc;
-                        true ->
-                            BinIdx = min(NumBins - 1, trunc((V - MinVal) / BinWidth)),
-                            maps:update_with(BinIdx, fun(C) -> C + 1 end, 1, Acc)
-                    end
-                end,
-                #{},
-                Values
-            ),
-            [maps:get(I, Bins, 0) || I <- lists:seq(0, NumBins - 1)]
+        true -> histogram_bins(Values, NumBins, MinVal, MaxVal, Range)
     end.
+
+%% @private Bin values into a histogram over a valid range.
+histogram_bins(Values, NumBins, MinVal, MaxVal, Range) ->
+    BinWidth = Range / NumBins,
+    Bins = lists:foldl(
+        fun(V, Acc) -> bin_value(V, MinVal, MaxVal, NumBins, BinWidth, Acc) end,
+        #{},
+        Values
+    ),
+    [maps:get(I, Bins, 0) || I <- lists:seq(0, NumBins - 1)].
+
+%% @private Add a single value to its histogram bin if within range.
+bin_value(V, MinVal, MaxVal, NumBins, BinWidth, Acc) ->
+    case V >= MinVal andalso V =< MaxVal of
+        false -> Acc;
+        true -> add_to_bin(V, MinVal, NumBins, BinWidth, Acc)
+    end.
+
+%% @private Increment the bin count for a value known to be within range.
+add_to_bin(V, MinVal, NumBins, BinWidth, Acc) ->
+    BinIdx = min(NumBins - 1, trunc((V - MinVal) / BinWidth)),
+    maps:update_with(BinIdx, fun(C) -> C + 1 end, 1, Acc).
 
 %%==============================================================================
 %% Selection Fallbacks
@@ -474,17 +491,19 @@ roulette_select_batch(Cumulative, Total, RandomVals) ->
 tournament_select([], _Fitnesses) -> 0;
 tournament_select(Contestants, Fitnesses) ->
     {Winner, _} = lists:foldl(
-        fun(Idx, {BestIdx, BestFit}) ->
-            Fit = lists:nth(Idx + 1, Fitnesses),
-            case Fit > BestFit of
-                true -> {Idx, Fit};
-                false -> {BestIdx, BestFit}
-            end
-        end,
+        fun(Idx, {BestIdx, BestFit}) -> best_contestant(Idx, Fitnesses, BestIdx, BestFit) end,
         {hd(Contestants), lists:nth(hd(Contestants) + 1, Fitnesses)},
         Contestants
     ),
     Winner.
+
+%% @private Keep the contestant with the higher fitness.
+best_contestant(Idx, Fitnesses, BestIdx, BestFit) ->
+    Fit = lists:nth(Idx + 1, Fitnesses),
+    case Fit > BestFit of
+        true -> {Idx, Fit};
+        false -> {BestIdx, BestFit}
+    end.
 
 %%==============================================================================
 %% Reward and Meta-Controller Fallbacks
@@ -593,16 +612,20 @@ weight_distance_batch(Target, Others, DistanceType) ->
 mutate_single_weight(Weight, MutationRate, PerturbRate, PerturbStrength) ->
     case rand:uniform() < MutationRate of
         true ->
-            case rand:uniform() < PerturbRate of
-                true ->
-                    %% Perturb with Gaussian noise
-                    Weight + rand:normal() * PerturbStrength;
-                false ->
-                    %% Full random replacement
-                    rand:uniform() * 2.0 - 1.0
-            end;
+            perturb_or_replace(Weight, PerturbRate, PerturbStrength);
         false ->
             Weight
+    end.
+
+%% @private Perturb an existing weight or replace it entirely.
+perturb_or_replace(Weight, PerturbRate, PerturbStrength) ->
+    case rand:uniform() < PerturbRate of
+        true ->
+            %% Perturb with Gaussian noise
+            Weight + rand:normal() * PerturbStrength;
+        false ->
+            %% Full random replacement
+            rand:uniform() * 2.0 - 1.0
     end.
 
 %%==============================================================================
@@ -632,11 +655,15 @@ clamp(X, Min, Max) -> max(Min, min(Max, X)).
 compute_weighted_sum(Values, Weights) ->
     case length(Values) =< length(Weights) of
         true ->
-            lists:foldl(
-                fun({V, W}, Acc) -> Acc + V * W end,
-                0.0,
-                lists:zip(Values, lists:sublist(Weights, length(Values)))
-            );
+            weighted_sum(Values, Weights);
         false ->
             0.0
     end.
+
+%% @private Sum element-wise products of values and weights.
+weighted_sum(Values, Weights) ->
+    lists:foldl(
+        fun({V, W}, Acc) -> Acc + V * W end,
+        0.0,
+        lists:zip(Values, lists:sublist(Weights, length(Values)))
+    ).

@@ -159,11 +159,14 @@ apply_bounded_internal(W, LR, PreActivity, PostActivity, Min, Max, Params) ->
 extract_variant(Params) ->
     case proplists:get_value(oja, Params) of
         true -> oja;
-        _ ->
-            case proplists:get_value(bounded, Params) of
-                {Min, Max} -> {bounded, Min, Max};
-                _ -> basic
-            end
+        _ -> extract_bounded_variant(Params)
+    end.
+
+%% @private Determine bounded vs basic variant from params
+extract_bounded_variant(Params) ->
+    case proplists:get_value(bounded, Params) of
+        {Min, Max} -> {bounded, Min, Max};
+        _ -> basic
     end.
 
 %% @private Clamp value to range
