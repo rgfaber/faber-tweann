@@ -40,8 +40,11 @@
 %%   fitness_goal     stop when best fitness >= this (default infinity)
 %%   init_sigma       initial step size (default 1.0)
 %%   x0               initial mean vector (default zeros)
+%%   trace            when true, record the running best fitness per generation
+%%                    (default false)
 %%
-%% Returns #{best, fitness, generations, evaluations, reason}
+%% Returns #{best, fitness, generations, evaluations, reason}, plus
+%% history => [{Generation, BestFitnessSoFar}] when trace is true
 %% (reason = solved | max_generations).
 -spec evolve(fitness_fun(), pos_integer(), map()) -> map().
 evolve(FitnessFun, N, Opts) ->
@@ -51,11 +54,13 @@ evolve(FitnessFun, N, Opts) ->
     Goal = maps:get(fitness_goal, Opts, infinity),
     Sigma0 = maps:get(init_sigma, Opts, 1.0),
     M0 = maps:get(x0, Opts, lists:duplicate(N, 0.0)),
+    Trace = maps:get(trace, Opts, false),
     {Weights, MuEff} = recomb_weights(Mu, Lambda),
     P = params(N, MuEff),
     State = #{m => M0, sigma => Sigma0, c => lists:duplicate(N, 1.0),
               ps => lists:duplicate(N, 0.0), pc => lists:duplicate(N, 0.0),
-              gen => 0, evals => 0, best => {undefined, ?NEG_INF}},
+              gen => 0, evals => 0, best => {undefined, ?NEG_INF},
+              trace => Trace, hist => []},
     loop(FitnessFun, N, Lambda, Mu, MaxGen, Goal, Weights, MuEff, P, State).
 
 %%%============================================================================
@@ -89,7 +94,7 @@ loop(_F, _N, _L, _Mu, 0, _Goal, _W, _MuEff, _P, S) ->
     result(S, max_generations);
 loop(F, N, Lambda, Mu, GenLeft, Goal, W, MuEff, P, S) ->
     #{m := M, sigma := Sigma, c := C, ps := Ps, pc := Pc,
-      gen := Gen, evals := Evals, best := Best} = S,
+      gen := Gen, evals := Evals, best := Best, trace := Trace, hist := Hist} = S,
     Sqc = [math:sqrt(Cj) || Cj <- C],
     %% Sample and evaluate lambda offspring.
     Offspring = [sample(M, Sigma, Sqc) || _ <- lists:seq(1, Lambda)],
@@ -126,8 +131,9 @@ loop(F, N, Lambda, Mu, GenLeft, Goal, W, MuEff, P, S) ->
                   true -> {TopX, TopF};
                   false -> Best
               end,
+    Hist1 = maybe_trace(Trace, Gen1, element(2, NewBest), Hist),
     S1 = S#{m := Mnew, sigma := Sigma1, c := Cnew, ps := Ps1, pc := Pc1,
-            gen := Gen1, evals := Evals + Lambda, best := NewBest},
+            gen := Gen1, evals := Evals + Lambda, best := NewBest, hist := Hist1},
     case reached(TopF, Goal) of
         true -> result(S1, solved);
         false -> loop(F, N, Lambda, Mu, GenLeft - 1, Goal, W, MuEff, P, S1)
@@ -147,10 +153,18 @@ sample(M, Sigma, Sqc) ->
 reached(_F, infinity) -> false;
 reached(F, Goal) -> F >= Goal.
 
+%% Record the running best fitness at each generation when tracing is on.
+maybe_trace(true, Gen, F, Hist) -> [{Gen, F} | Hist];
+maybe_trace(false, _Gen, _F, Hist) -> Hist.
+
 result(S, Reason) ->
     {BestW, BestF} = maps:get(best, S),
-    #{best => BestW, fitness => BestF, generations => maps:get(gen, S),
-      evaluations => maps:get(evals, S), reason => Reason}.
+    Base = #{best => BestW, fitness => BestF, generations => maps:get(gen, S),
+             evaluations => maps:get(evals, S), reason => Reason},
+    add_history(maps:get(trace, S, false), maps:get(hist, S, []), Base).
+
+add_history(true, Hist, Base) -> Base#{history => lists:reverse(Hist)};
+add_history(false, _Hist, Base) -> Base.
 
 %%%============================================================================
 %%% Vector helpers

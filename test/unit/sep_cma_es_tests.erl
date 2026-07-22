@@ -52,4 +52,19 @@ result_contract_test() ->
     ?assertMatch(#{best := _, fitness := _, generations := _,
                    evaluations := _, reason := _}, R),
     ?assertEqual(30, maps:get(generations, R)),
-    ?assertEqual(30 * 20, maps:get(evaluations, R)).
+    ?assertEqual(30 * 20, maps:get(evaluations, R)),
+    ?assertEqual(false, maps:is_key(history, R)).
+
+%% trace => true adds a per-generation best-fitness history: one {Gen, Fit}
+%% entry per generation, in order, with the fitness monotonically non-decreasing
+%% (it is the running best) and ending at the final best fitness.
+trace_history_test() ->
+    rand:seed(exsss, {2, 2, 2}),
+    R = sep_cma_es:evolve(neg_sphere([0.0, 0.0]), 2,
+                          #{lambda => 20, max_generations => 25, trace => true}),
+    Hist = maps:get(history, R),
+    ?assertEqual(25, length(Hist)),
+    ?assertEqual(lists:seq(1, 25), [G || {G, _} <- Hist]),
+    Fits = [F || {_, F} <- Hist],
+    ?assertEqual(Fits, lists:sort(Fits)),
+    ?assertEqual(maps:get(fitness, R), lists:last(Fits)).
