@@ -60,7 +60,12 @@
     %% inferred from how the pole responds -- the continuous-control analogue of a
     %% reversal bandit. Default: no shift (gain 1.0 forever).
     shift_at = 1000000000 :: non_neg_integer(),
-    shift_gain = 1.0 :: float()
+    shift_gain = 1.0 :: float(),
+    %% A constant external disturbance force (wind) added to the cart each step,
+    %% NOT routed through the motor gain. It forces continuous non-zero control
+    %% effort, so a regulator cannot settle to a zero-effort equilibrium that would
+    %% make the shift_gain irrelevant. Default: no wind.
+    wind = 0.0 :: float()
 }).
 
 %%%============================================================================
@@ -84,6 +89,7 @@ apply_override({p2_angle, V}, S) -> S#state{p2_angle = V};
 apply_override({p2_vel, V}, S) -> S#state{p2_vel = V};
 apply_override({shift_at, V}, S) -> S#state{shift_at = V};
 apply_override({shift_gain, V}, S) -> S#state{shift_gain = V};
+apply_override({wind, V}, S) -> S#state{wind = V};
 apply_override(_Other, S) -> S.
 
 %% Sense reads the current cart-pole state; it does not advance the physics.
@@ -102,7 +108,7 @@ sense(_SensorName, [Variant], S) ->
 act(_ActuatorName, Params, Output, S) when is_list(Output) ->
     {DampingFlag, DPBFlag, Goal} = params(Params),
     Force = lists:sum(Output),
-    S1 = sm_double_pole(Force * 10 * current_gain(S), S, 2),
+    S1 = sm_double_pole(Force * 10 * current_gain(S) + S#state.wind, S, 2),
     Failed = (abs(S1#state.p1_angle) > ?ANGLE_LIMIT)
         orelse (abs(S1#state.p2_angle) * DPBFlag > ?ANGLE_LIMIT)
         orelse (abs(S1#state.cpos) > ?TRACK_LIMIT),
