@@ -53,7 +53,14 @@
     p2_angle = 0.0 :: float(),
     p2_vel = 0.0 :: float(),
     time_step = 0 :: non_neg_integer(),
-    fitness_acc = 0.0 :: float()
+    fitness_acc = 0.0 :: float(),
+    %% A HIDDEN mid-episode dynamics shift (for online-adaptation studies): from
+    %% step shift_at onward the applied force is multiplied by shift_gain (e.g.
+    %% -1.0 reverses the motor, 0.3 weakens it). Not sensed, so it can only be
+    %% inferred from how the pole responds -- the continuous-control analogue of a
+    %% reversal bandit. Default: no shift (gain 1.0 forever).
+    shift_at = 1000000000 :: non_neg_integer(),
+    shift_gain = 1.0 :: float()
 }).
 
 %%%============================================================================
@@ -75,6 +82,8 @@ apply_override({p1_angle, V}, S) -> S#state{p1_angle = V};
 apply_override({p1_vel, V}, S) -> S#state{p1_vel = V};
 apply_override({p2_angle, V}, S) -> S#state{p2_angle = V};
 apply_override({p2_vel, V}, S) -> S#state{p2_vel = V};
+apply_override({shift_at, V}, S) -> S#state{shift_at = V};
+apply_override({shift_gain, V}, S) -> S#state{shift_gain = V};
 apply_override(_Other, S) -> S.
 
 %% Sense reads the current cart-pole state; it does not advance the physics.
@@ -93,7 +102,7 @@ sense(_SensorName, [Variant], S) ->
 act(_ActuatorName, Params, Output, S) when is_list(Output) ->
     {DampingFlag, DPBFlag, Goal} = params(Params),
     Force = lists:sum(Output),
-    S1 = sm_double_pole(Force * 10, S, 2),
+    S1 = sm_double_pole(Force * 10 * current_gain(S), S, 2),
     Failed = (abs(S1#state.p1_angle) > ?ANGLE_LIMIT)
         orelse (abs(S1#state.p2_angle) * DPBFlag > ?ANGLE_LIMIT)
         orelse (abs(S1#state.cpos) > ?TRACK_LIMIT),
@@ -146,6 +155,10 @@ fitness(with_damping, S) ->
 params([Damping, DPB]) -> {Damping, DPB, ?DEFAULT_GOAL_STEPS};
 params([Damping, DPB, Goal]) -> {Damping, DPB, Goal};
 params([Damping]) -> {Damping, 0, ?DEFAULT_GOAL_STEPS}.
+
+%% The applied-force multiplier: 1.0 until the hidden shift, shift_gain after.
+current_gain(#state{time_step = T, shift_at = At, shift_gain = G}) when T >= At -> G;
+current_gain(_S) -> 1.0.
 
 %%%============================================================================
 %%% Physics: two-pole cart, semi-implicit Euler, force on the first sub-step
