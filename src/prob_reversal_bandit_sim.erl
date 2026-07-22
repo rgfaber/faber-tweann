@@ -36,6 +36,7 @@
 -record(state, {
     good_arm = 0 :: 0 | 1,
     reversal_at = 30 :: non_neg_integer(),
+    period = 0 :: non_neg_integer(),
     lifetime = 60 :: pos_integer(),
     p_hi = 0.8 :: float(),
     flip_seed = 0 :: integer(),
@@ -44,8 +45,14 @@
     last_action = 0.0 :: float()
 }).
 
+%% Single reversal at ReversalAt.
 init([GoodArm, ReversalAt, Lifetime, FlipSeed, PHi]) ->
     #state{good_arm = GoodArm, reversal_at = ReversalAt, lifetime = Lifetime,
+           flip_seed = FlipSeed, p_hi = PHi};
+%% Periodic reversals every Period trials (ReversalAt ignored) -- the stressed
+%% regime that demands repeated re-adaptation.
+init([GoodArm, _ReversalAt, Lifetime, FlipSeed, PHi, Period]) ->
+    #state{good_arm = GoodArm, period = Period, lifetime = Lifetime,
            flip_seed = FlipSeed, p_hi = PHi};
 init(_Params) ->
     #state{}.
@@ -77,8 +84,15 @@ action_signed(1) -> -1.0.
 reward(true) -> 1.0;
 reward(false) -> -1.0.
 
+%% Periodic mode flips the good arm every Period trials; single-reversal mode flips
+%% once at ReversalAt.
+current_good(#state{good_arm = G, period = P, trial = T}) when P > 0 ->
+    flip(G, (T div P) rem 2);
 current_good(#state{good_arm = G, reversal_at = R, trial = T}) when T >= R -> 1 - G;
 current_good(#state{good_arm = G}) -> G.
+
+flip(G, 0) -> G;
+flip(G, 1) -> 1 - G.
 
 %% Deterministic noisy payout: the chosen arm pays iff a fixed hashed uniform draw
 %% falls under this arm's pay probability (PHi if currently good, 1-PHi if bad).
