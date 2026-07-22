@@ -27,6 +27,7 @@
     evaluate/2,
     evaluate_with_state/2,
     evaluate_with_plasticity/3,
+    evaluate_with_neuromod/4,
     evaluate_with_activations/2,
     from_genotype/1,
     get_weights/1,
@@ -190,6 +191,27 @@ evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
     OA = resolve_output_activation(OutputActivation, Activation),
     {Outputs, NewLayers} = forward_propagate_plastic(Layers, Inputs, Activation, OA, Rule),
     {Outputs, Net#network{layers = NewLayers, compiled_ref = undefined}}.
+
+%% @doc Evaluate with reward-modulated (three-factor) plasticity.
+%%
+%% Identical to evaluate_with_plasticity/3, but every weight change is gated by a
+%% neuromodulatory signal M (typically a reward): dW = M * Eta * (...). This is the
+%% third factor of the classic pre x post x neuromodulator rule -- the piece a fixed
+%% Hebbian rule lacks. M scales the rule's learning rate, so M = 0 freezes learning,
+%% M > 0 reinforces the just-active pathway, M < 0 reverses it. Works for the global
+%% ABCD, Oja, and per-connection rule shapes alike (M multiplies the whole update).
+-spec evaluate_with_neuromod(network(), [float()],
+                             {float(), float(), float(), float(), float()}
+                             | {oja, float()}
+                             | {pc, [[[{float(), float(), float(), float()}]]], float()},
+                             float()) ->
+    {[float()], network()}.
+evaluate_with_neuromod(Net, Inputs, Rule, M) ->
+    evaluate_with_plasticity(Net, Inputs, scale_eta(Rule, M)).
+
+scale_eta({A, B, C, D, Eta}, M) -> {A, B, C, D, M * Eta};
+scale_eta({oja, Eta}, M) -> {oja, M * Eta};
+scale_eta({pc, CoeffLayers, Eta}, M) -> {pc, CoeffLayers, M * Eta}.
 
 forward_propagate_plastic([{Weights, Biases}], Inputs, _Activation, OutputActivation, Rule) ->
     {Outputs, NewLayer} = plastic_layer(Weights, Biases, Inputs, OutputActivation, Rule),

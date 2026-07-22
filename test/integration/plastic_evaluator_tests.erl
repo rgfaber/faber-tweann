@@ -95,6 +95,31 @@ per_connection_zero_rule_is_inert_test() ->
                      Net0, [1.0, 1.0], {pc, [L1, L2], 0.5}),
     ?assertEqual(W0, network_evaluator:get_weights(Net1)).
 
+%% Reward-modulated (three-factor) plasticity: the modulator M gates the update.
+%% M=0 freezes learning (weights unchanged); M and -M move weights in OPPOSITE
+%% directions by the same amount (M scales the whole delta). Same rule, same input.
+neuromod_gate_freezes_and_reverses_test() ->
+    rand:seed(exsss, {31, 11, 11}),
+    Net0 = network_evaluator:create_feedforward(2, [6], 1, tanh, tanh),
+    Init = network_evaluator:get_weights(Net0),
+    Rule = {1.0, 0.0, 0.0, 0.0, 0.3},
+    %% M = 0: no learning.
+    {_, NZ} = network_evaluator:evaluate_with_neuromod(
+                network_evaluator:set_weights(Net0, Init), [1.0, 0.5], Rule, 0.0),
+    ?assertEqual(Init, network_evaluator:get_weights(NZ)),
+    %% M = +1 vs M = -1: equal and opposite weight changes from the same baseline.
+    {_, NP} = network_evaluator:evaluate_with_neuromod(
+                network_evaluator:set_weights(Net0, Init), [1.0, 0.5], Rule, 1.0),
+    {_, NM} = network_evaluator:evaluate_with_neuromod(
+                network_evaluator:set_weights(Net0, Init), [1.0, 0.5], Rule, -1.0),
+    Wp = network_evaluator:get_weights(NP),
+    Wm = network_evaluator:get_weights(NM),
+    ?assert(Wp =/= Init),
+    DeltasP = [P - I || {P, I} <- lists:zip(Wp, Init)],
+    DeltasM = [M - I || {M, I} <- lists:zip(Wm, Init)],
+    ?assert(lists:all(fun({Dp, Dm}) -> abs(Dp + Dm) < 1.0e-9 end,
+                      lists:zip(DeltasP, DeltasM))).
+
 mem_after_cue(Net0, Init, Cue) ->
     {_Out, Net1} = network_evaluator:evaluate_with_plasticity(
                      network_evaluator:set_weights(Net0, Init), [Cue, 0.0], ?RULE),
