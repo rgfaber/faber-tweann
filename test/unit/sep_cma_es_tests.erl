@@ -68,3 +68,22 @@ trace_history_test() ->
     Fits = [F || {_, F} <- Hist],
     ?assertEqual(Fits, lists:sort(Fits)),
     ?assertEqual(maps:get(fitness, R), lists:last(Fits)).
+
+%% on_generation is called once per generation with the running best fitness, in
+%% order; the callback can push live progress to a UI.
+on_generation_callback_test() ->
+    rand:seed(exsss, {3, 3, 3}),
+    Self = self(),
+    Fun = fun(Gen, Fit) -> Self ! {gen, Gen, Fit} end,
+    _ = sep_cma_es:evolve(neg_sphere([0.0, 0.0]), 2,
+                          #{lambda => 10, max_generations => 12, on_generation => Fun}),
+    Gens = collect_gens([]),
+    ?assertEqual(lists:seq(1, 12), [G || {G, _} <- Gens]),
+    Fits = [F || {_, F} <- Gens],
+    ?assertEqual(Fits, lists:sort(Fits)).
+
+collect_gens(Acc) ->
+    receive
+        {gen, G, F} -> collect_gens([{G, F} | Acc])
+    after 0 -> lists:reverse(Acc)
+    end.
