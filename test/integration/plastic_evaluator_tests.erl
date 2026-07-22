@@ -57,6 +57,44 @@ oja_rule_moves_and_bounds_weights_test() ->
     ?assert(W0 =/= W1),
     ?assert(lists:all(fun(X) -> abs(X) =< 10.0 end, W1)).
 
+%% Per-connection ABCD ({pc, CoeffLayers, Eta}): a rule with a distinct {A,B,C,D}
+%% per synapse moves weights, and connections with different coefficients move by
+%% different amounts (that per-synapse freedom is the whole point of the variant).
+per_connection_rule_moves_weights_per_synapse_test() ->
+    rand:seed(exsss, {31, 7, 7}),
+    Net0 = network_evaluator:create_feedforward(2, [3], 1, tanh, tanh),
+    W0 = network_evaluator:get_weights(Net0),
+    %% Layer 1: 3 neurons x 2 conns; neuron 1 learns (A=1), neurons 2,3 are inert.
+    L1 = [[{1.0, 0.0, 0.0, 0.0}, {1.0, 0.0, 0.0, 0.0}],
+          [{0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}],
+          [{0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}]],
+    %% Layer 2: 1 neuron x 3 conns, all inert.
+    L2 = [[{0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}]],
+    {_Out, Net1} = network_evaluator:evaluate_with_plasticity(
+                     Net0, [1.0, 1.0], {pc, [L1, L2], 0.3}),
+    W1 = network_evaluator:get_weights(Net1),
+    ?assert(W0 =/= W1),
+    %% Neuron 1's two input weights moved; the other input weights held exactly.
+    Moved = lists:sublist(W1, 2),
+    Held = lists:sublist(W1, 3, 4),
+    Moved0 = lists:sublist(W0, 2),
+    Held0 = lists:sublist(W0, 3, 4),
+    ?assert(Moved =/= Moved0),
+    ?assertEqual(Held0, Held).
+
+%% A per-connection rule of all-zero coefficients is inert: weights are unchanged
+%% (the memoryless special case), confirming the plasticity is fully rule-driven.
+per_connection_zero_rule_is_inert_test() ->
+    rand:seed(exsss, {31, 8, 8}),
+    Net0 = network_evaluator:create_feedforward(2, [3], 1, tanh, tanh),
+    W0 = network_evaluator:get_weights(Net0),
+    Zero = {0.0, 0.0, 0.0, 0.0},
+    L1 = [[Zero, Zero], [Zero, Zero], [Zero, Zero]],
+    L2 = [[Zero, Zero, Zero]],
+    {_Out, Net1} = network_evaluator:evaluate_with_plasticity(
+                     Net0, [1.0, 1.0], {pc, [L1, L2], 0.5}),
+    ?assertEqual(W0, network_evaluator:get_weights(Net1)).
+
 mem_after_cue(Net0, Init, Cue) ->
     {_Out, Net1} = network_evaluator:evaluate_with_plasticity(
                      network_evaluator:set_weights(Net0, Init), [Cue, 0.0], ?RULE),

@@ -162,15 +162,29 @@ evaluate_with_state(#network{layers = Layers, activation = Activation,
 
 %% @doc Evaluate with online Hebbian plasticity (memory-by-learning).
 %%
-%% Forward pass, then update every weight by a global ABCD-Hebbian rule using the
-%% pre- and post-synaptic activations of each layer:
-%%   dW = Eta * (A*pre*post + B*pre + C*post + D), clamped to [-10, 10].
-%% The evolutionary search tunes the RULE {A,B,C,D,Eta}, not the weights, so the
-%% network adapts its own weights within an episode. Biases are not plastic.
+%% Forward pass, then update every weight by a Hebbian rule using the pre- and
+%% post-synaptic activations of each layer. Three rule shapes are supported:
+%%   {A,B,C,D,Eta}          global ABCD-Hebbian, ONE rule for all synapses:
+%%                          dW = Eta * (A*pre*post + B*pre + C*post + D)
+%%   {oja, Eta}             Oja's self-normalising rule: dW = Eta*post*(pre-post*w)
+%%   {pc, CoeffLayers, Eta} PER-CONNECTION ABCD: each synapse has its OWN {A,B,C,D}
+%%                          (CoeffLayers mirrors the weight structure), Eta shared.
+%% Weights are clamped to [-10, 10]. The evolutionary search tunes the RULE, not
+%% the weights, so the network adapts its own weights within an episode. Global
+%% ABCD is the special case of per-connection where all synapses share coefficients
+%% -- per-connection is strictly more expressive. Biases are not plastic.
 -spec evaluate_with_plasticity(network(), [float()],
                                {float(), float(), float(), float(), float()}
-                               | {oja, float()}) ->
+                               | {oja, float()}
+                               | {pc, [[[{float(), float(), float(), float()}]]], float()}) ->
     {[float()], network()}.
+evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
+                                  output_activation = OutputActivation} = Net,
+                         Inputs, {pc, CoeffLayers, Eta}) ->
+    OA = resolve_output_activation(OutputActivation, Activation),
+    {Outputs, NewLayers} =
+        forward_propagate_plastic_pc(Layers, CoeffLayers, Inputs, Activation, OA, Eta),
+    {Outputs, Net#network{layers = NewLayers, compiled_ref = undefined}};
 evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
                                   output_activation = OutputActivation} = Net, Inputs, Rule) ->
     OA = resolve_output_activation(OutputActivation, Activation),
@@ -200,6 +214,28 @@ hebbian_neuron(W, Pre, Post, {A, B, C, D, Eta}) ->
 hebbian_neuron(W, Pre, Post, {oja, Eta}) ->
     [clamp_weight(Wi + Eta * Post * (Pi - Post * Wi))
      || {Wi, Pi} <- lists:zip(W, Pre)].
+
+%% Per-connection ABCD: walk layers and their coefficient structure in lockstep.
+forward_propagate_plastic_pc([{W, B}], [LC], Inputs, _Activation, OA, Eta) ->
+    {Outputs, NewLayer} = plastic_layer_pc(W, B, LC, Inputs, OA, Eta),
+    {Outputs, [NewLayer]};
+forward_propagate_plastic_pc([{W, B} | RestL], [LC | RestC], Inputs, Activation, OA, Eta) ->
+    {Outputs, NewLayer} = plastic_layer_pc(W, B, LC, Inputs, Activation, Eta),
+    {FinalOutputs, NewRest} =
+        forward_propagate_plastic_pc(RestL, RestC, Outputs, Activation, OA, Eta),
+    {FinalOutputs, [NewLayer | NewRest]}.
+
+plastic_layer_pc(Weights, Biases, LayerCoeffs, Inputs, Activation, Eta) ->
+    Outputs = [apply_activation(dot_product(Wn, Inputs) + Bn, Activation)
+               || {Wn, Bn} <- lists:zip(Weights, Biases)],
+    NewWeights = [hebbian_neuron_pc(Wn, Inputs, On, Cn, Eta)
+                  || {Wn, On, Cn} <- lists:zip3(Weights, Outputs, LayerCoeffs)],
+    {Outputs, {NewWeights, Biases}}.
+
+%% dw = Eta*(A*pre*post + B*pre + C*post + D) with a distinct {A,B,C,D} per synapse.
+hebbian_neuron_pc(W, Pre, Post, Coeffs, Eta) ->
+    [clamp_weight(Wi + Eta * (A * Pi * Post + B * Pi + C * Post + D))
+     || {Wi, Pi, {A, B, C, D}} <- lists:zip3(W, Pre, Coeffs)].
 
 clamp_weight(X) when X < -10.0 -> -10.0;
 clamp_weight(X) when X > 10.0 -> 10.0;
