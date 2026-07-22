@@ -147,7 +147,14 @@ init() ->
     case erlang:load_nif(SoName, 0) of
         ok -> ok;
         {error, {reload, _}} -> ok;  %% Already loaded
-        {error, Reason} -> {error, Reason}
+        %% NIF absent (e.g. a FABER_TWEANN_SKIP_NIF build): return ok so the
+        %% module still LOADS. Returning {error, _} from on_load aborts module
+        %% loading, which crashes a release at boot (the NIF is optional here).
+        %% The pure-Erlang fallback runs when {faber_tweann, [{nif_impl, fallback}]}
+        %% is configured; a direct NIF call otherwise raises nif_not_loaded, and
+        %% is_loaded/0 reports false. Kept silent: on_load runs under kernel_sup
+        %% before logger is guaranteed up; tweann_nif logs the fallback notice.
+        {error, _Reason} -> ok
     end.
 
 %% @private Locate priv relative to this beam file when the app is not yet loaded.
