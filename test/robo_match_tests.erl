@@ -16,7 +16,7 @@
 -include("robo_sim.hrl").
 
 -define(GOLDEN_MATCH,
-        <<"E1C8D977862169A1448E58D7A7B80C6C4D11EA0409C68734B0E966552F1C80EF">>).
+        <<"DFCD8106EDC9AE214F6AE99BB5F4988FE441243284A6D3769634D778B3895E88">>).
 
 %%==============================================================================
 %% Kill gate 0a
@@ -166,10 +166,26 @@ golden_match_vector_test() ->
 %% A fixed pairing at a fixed start, hashed. The cross-machine CI job diffs this
 %% alongside the engine's and the forward pass's vectors, so all three layers of
 %% the match path are covered rather than only the physics.
+%%
+%% MAPS ARE CANONICALISED OUT BEFORE HASHING, and this is not fastidiousness.
+%% term_to_binary is NOT canonical for maps: the first version of this vector
+%% hashed robo_match:match/3's result maps directly and produced a different
+%% digest under eunit than under a plain erl, from byte 14 onward, while the
+%% terms themselves compared byte-identical when printed. A golden vector whose
+%% value depends on which VM serialised it is worse than no vector, because it
+%% would fail the cross-machine CI job for a reason that has nothing to do with
+%% the simulation and would train everyone to re-pin it. So the result is
+%% flattened to plain tuples in a fixed field order, and the deterministic option
+%% is set as well. robo_sim and robo_net hash only tuples and lists, which is
+%% why their vectors were stable throughout.
 match_trace() ->
-    Results = [robo_match:match(A, B, S)
+    Results = [canon(robo_match:match(A, B, S))
                || {A, B} <- [{predictive_gun, circle_strafer},
                              {rammer, spinner},
                              {circle_strafer, sitting_duck}],
                   S <- robo_match:starts()],
-    crypto:hash(sha256, term_to_binary(Results, [{minor_version, 2}])).
+    crypto:hash(sha256, term_to_binary(Results, [deterministic, {minor_version, 2}])).
+
+canon(#{a := A, b := B, turns := T}) -> {T, outcome_tuple(A), outcome_tuple(B)}.
+
+outcome_tuple(#{damage := D, survived := S, alive := L}) -> {D, S, L}.
