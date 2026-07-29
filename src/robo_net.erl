@@ -58,10 +58,15 @@
 %% float. If a float ever appears downstream of quantize/1 the determinism
 %% guarantee is void, so that boundary is the thing to defend in review.
 %%
-%% ROUNDING IS ONE CONVENTION, EVERYWHERE: round half AWAY FROM ZERO, applied by
-%% splitting on sign so that the mapping is exactly odd. quantize/1 uses the
-%% round/1 BIF, which is already half-away-from-zero; narrow/1, to_arena/1 and
-%% to_range/2 each split on sign by hand. The consequence worth stating is
+%% ROUNDING: every mapping here is exactly ODD, applied by splitting on sign, but
+%% they are NOT all the same rounding rule and the difference matters to a porter.
+%% quantize/1, narrow/1 and to_arena/1 round HALF AWAY FROM ZERO: quantize/1 via
+%% the round/1 BIF, the other two by adding their own constant before shifting.
+%% to_range/2 TRUNCATES TOWARD ZERO; it adds no constant at all. That was stated
+%% wrongly here until an audit caught it, and it is the one place where following
+%% this header rather than the code produces cross-language divergence, because
+%% adding the missing constant would change every intent field the network emits
+%% on every turn. The consequence worth stating is
 %% negative: no arithmetic right shift in this module is ever applied to a
 %% negative operand, so the classic fixed-point trap of mixing floor semantics
 %% with truncate-toward-zero semantics is not merely specified here, it is never
@@ -226,7 +231,21 @@ dot_acc(_Ws, _Xs, Acc) -> Acc.
 %% is how an output neuron becomes an intent field: to_range(A, 7) for turn_body,
 %% 14 for turn_gun, 32 for turn_radar, 512 for accel. Sign-split for the same
 %% reason narrow/1 is, so the mapping is exactly odd.
+%%
+%% AUDIT FIX, and note the correction to the module header while porting this:
+%% this function TRUNCATES TOWARD ZERO. It does not round half away from zero.
+%% It adds no rounding constant, unlike narrow/1 and to_arena/1 which add theirs.
+%% A porter who followed the header rather than the code would add one here and
+%% change every intent field the network emits, on every turn, and the port would
+%% then replay differently from this reference.
+%%
+%% The Max guard is the second half of the fix. The module's central negative
+%% claim is that no arithmetic right shift here is ever applied to a negative
+%% operand, so the classic fixed-point floor trap is never reached rather than
+%% merely specified away. A negative Max routed a negative product into bsr and
+%% made that claim false, so it is now structural instead of documentary.
 -spec to_range(integer(), non_neg_integer()) -> integer().
+to_range(_A, Max) when Max =< 0 -> 0;
 to_range(A, Max) when A < 0 -> -((-A * Max) bsr 12);
 to_range(A, Max) -> (A * Max) bsr 12.
 
@@ -319,9 +338,19 @@ eval(Layers, Weights, Inputs) -> [to_arena(A) || A <- eval_q12(Layers, Weights, 
 %% and feed to_range/2 directly. Prefer this when driving an intent: eval/3 is
 %% the arena-scale contract and costs 4 bits at the very last step, which is 4
 %% bits an intent field would rather keep.
+%% AUDIT FIX: a topology of fewer than two layers has NO weight layer, so nothing
+%% is computed and forward/3 used to fall through returning the raw inputs. That
+%% silently broke the output-range guarantee the module advertises, and with it
+%% to_range/2's documented totality: eval([4], [], [204800, ...]) returned an
+%% arena distance 800 times outside the promised -256 to 256, and weight_count/1
+%% reports 0 for such a topology so it looks like a legal zero-parameter genome
+%% rather than a misconfiguration. Such a topology now returns the resting
+%% activation once per declared output, which keeps the arity contract, keeps the
+%% range guarantee and keeps the function total.
 -spec eval_q12([non_neg_integer()], [integer()], [integer()]) -> [integer()].
-eval_q12([In | _] = Layers, Weights, Inputs) ->
+eval_q12([In, _ | _] = Layers, Weights, Inputs) ->
     forward(Layers, [from_arena(W) || W <- Weights], fit(In, [from_arena(X) || X <- Inputs]));
+eval_q12([N], _Weights, _Inputs) -> lists:duplicate(max(0, N), 0);
 eval_q12([], _Weights, _Inputs) -> [].
 
 %% One layer per step, consuming the genome left to right.

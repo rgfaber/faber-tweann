@@ -102,7 +102,11 @@
 -spec fp(integer()) -> integer().
 fp(N) -> N * ?FP.
 
-%% Fixed-point to whole units (truncating toward zero is avoided; this floors).
+%% Fixed-point to whole units. Erlang's div TRUNCATES TOWARD ZERO; it does not
+%% floor. So unfp(-1) is 0, not -1. Stated precisely because both robo_net and
+%% robo_gauntlet reason about this trap, and a reader calibrating on a wrong
+%% comment here would mis-audit every div site in the match path. Not reachable
+%% with a negative operand today, since positions are wall-clamped to TANK_R.
 -spec unfp(integer()) -> integer().
 unfp(N) -> N div ?FP.
 
