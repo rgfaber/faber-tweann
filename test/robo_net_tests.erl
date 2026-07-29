@@ -141,10 +141,17 @@ golden_forward_vector_test() ->
 %% A fixed genome driven over a fixed input sweep, hashed. This is the forward
 %% pass's counterpart to the engine's golden replay vector, and the vector the
 %% cross-machine CI job diffs.
+%%
+%% Rows is a list of lists of integers, with no map anywhere, and the
+%% deterministic option is set as insurance rather than necessity. The reason is
+%% recorded because it cost real time to find: robo_match's vector once hashed
+%% result maps directly, term_to_binary is not canonical for maps, and the digest
+%% then differed between VMs while the terms themselves compared identical. Keep
+%% maps out of anything that gets hashed on this front.
 forward_trace() ->
     Layers = [5, 7, 4],
     N = robo_net:weight_count(Layers),
     W = [((X * 2654435761) rem 4096) - 2048 || X <- lists:seq(1, N)],
     Rows = [robo_net:eval_q12(Layers, W, [X, -X, X div 2, 1000 - X, X * 3])
             || X <- lists:seq(-2000, 2000, 13)],
-    crypto:hash(sha256, term_to_binary(Rows, [{minor_version, 2}])).
+    crypto:hash(sha256, term_to_binary(Rows, [deterministic, {minor_version, 2}])).

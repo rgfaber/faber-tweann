@@ -354,6 +354,17 @@ cool(#tank{gun_heat = GH} = T) -> T#tank{gun_heat = max(0, GH - ?GUN_COOL)}.
 %% A hash of the full arena state. The cross-machine CI job replays a fixed match
 %% on two boxes and diffs this; any divergence is a determinism defect, and a
 %% determinism defect makes every downstream verification claim false.
+%%
+%% The term below is deliberately flattened to TUPLES AND INTEGERS, never maps,
+%% and term_to_binary is called with the deterministic option even though nothing
+%% here currently needs it. Both are insurance against one specific accident that
+%% has already happened once on this front: robo_match's golden vector hashed
+%% result maps directly, and term_to_binary is not canonical for maps, so the
+%% digest differed between VMs while the terms compared byte-identical when
+%% printed. A vector that varies by VM is worse than no vector, because the
+%% cross-machine job then fails for reasons unrelated to the simulation and
+%% everyone learns to re-pin it. If a map is ever added to the arena record, this
+%% function must keep flattening it out by hand.
 -spec trace_hash(#arena{}) -> binary().
 trace_hash(#arena{turn = Turn, tanks = Ts, bullets = Bs}) ->
     Terms = [Turn,
@@ -362,4 +373,4 @@ trace_hash(#arena{turn = Turn, tanks = Ts, bullets = Bs}) ->
                T#tank.dead, T#tank.damage_dealt} || T <- Ts],
              [{B#bullet.owner, B#bullet.x, B#bullet.y, B#bullet.heading,
                B#bullet.power} || B <- Bs]],
-    crypto:hash(sha256, term_to_binary(Terms, [{minor_version, 2}])).
+    crypto:hash(sha256, term_to_binary(Terms, [deterministic, {minor_version, 2}])).
