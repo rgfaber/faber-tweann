@@ -246,10 +246,15 @@ engine_id() ->
                 iolist_to_binary([[atom_to_binary(M, utf8), 0, module_md5(M), 0]
                                   || M <- Mods])).
 
+%% module_info(md5) DIRECTLY, and not via the attributes list. The first version
+%% looked the key up in attributes first and fell back to this, which is
+%% wrong-shaped: a module that ever gained a literal -md5(...) attribute would
+%% have that attribute's value, a list-wrapped term, shadow the real beam
+%% checksum. Nothing would fail, and the engine fingerprint would quietly stop
+%% naming the engine.
 module_md5(M) ->
     _ = code:ensure_loaded(M),
-    proplists:get_value(md5, M:module_info(attributes),
-                        M:module_info(md5)).
+    M:module_info(md5).
 
 %% A battle's public manifest: who fought, as what, and from where.
 manifest(Entrants, Placed) ->
