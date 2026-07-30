@@ -66,13 +66,22 @@ battle(_Entrants, _Opts) -> {error, entrants_not_a_list}.
 start(_Entrants, _Opts, {error, _} = E) -> E;
 start(Entrants, Opts, ok) ->
     Ids = [Id || {Id, _} <- Entrants],
-    Placed = place(length(Entrants), maps:get(radius, Opts, default_radius())),
+    Placed = placement(length(Entrants), Opts),
     Arena = robo_sim:new([{Id, X, Y, H} || {Id, {X, Y, H}} <- lists:zip(Ids, Placed)]),
     States = [{Id, init_one(Spec)} || {Id, Spec} <- Entrants],
     Result = loop(Arena, Entrants, States, #{}),
     {ok, Result#{entrants => manifest(Entrants, Placed),
                  engine => engine_id(),
-                 placement_radius => maps:get(radius, Opts, default_radius())}}.
+                 placement => placement_note(Opts)}}.
+
+%% HOW THE ENTRANTS WERE PLACED, honestly. The first version reported
+%% placement_radius unconditionally, which is a real-looking number describing
+%% something that did not happen whenever an explicit placement was supplied: the
+%% radius was never consulted. A published result carrying it would have named the
+%% wrong geometry, which is this front's recurring failure and the reason the
+%% mode is now stated rather than implied.
+placement_note(#{placement := P}) -> #{mode => explicit, entrants => length(P)};
+placement_note(Opts) -> #{mode => circle, radius => maps:get(radius, Opts, default_radius())}.
 
 %% ADMISSION. Every reason a battle refuses to start, checked before a turn is
 %% simulated. A duplicate id is in here because the arena keys tanks by id and two
@@ -188,6 +197,24 @@ winner(_None_or_many) -> none.
 %%==============================================================================
 %% Placement and provenance
 %%==============================================================================
+
+%% EXPLICIT PLACEMENT OVERRIDES THE CIRCLE, AND FOR A DUEL IT MUST.
+%%
+%% The circle is right for a free-for-all: N entrants evenly spaced, nobody with a
+%% better seat. It is WRONG for a two-tank duel, and measurably so. Two entrants
+%% on a circle facing the centre are exactly colinear and exactly facing at a
+%% fixed distance, which is the geometry robo_starts exists to avoid: an
+%% all-mutually-facing set drew 106 of 160 with 70 percent of matches censored at
+%% the turn cap. Worse, the seat swap is then a rotation of the same battle, so
+%% playing both orders yields one sample rather than two. That was verified, not
+%% suspected: both orders ran 696 turns with the corresponding winner.
+%%
+%% So a caller measuring anything passes {placement, [{X, Y, Heading}, ...]} from
+%% robo_starts, in whole units, one entry per entrant in list order. The circle
+%% remains the default because a spectacle battle of eight tanks wants it.
+placement(N, #{placement := P}) when length(P) =:= N -> P;
+placement(N, #{placement := P}) -> error({placement_arity, length(P), N});
+placement(N, Opts) -> place(N, maps:get(radius, Opts, default_radius())).
 
 -spec place(pos_integer()) -> [{integer(), integer(), 0..255}].
 place(N) -> place(N, default_radius()).
