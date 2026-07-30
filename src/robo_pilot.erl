@@ -20,8 +20,25 @@
 %% body character for character. Only the names lost their pilot_ prefix, which is
 %% redundant in a module called robo_pilot, and act/4 now matches
 %% robo_gauntlet:act/4 exactly so a host can drive a genome and a scripted bot
-%% through one call shape. robo_pilot_tests proves the equivalence against the
-%% archived phase 0 champions rather than asserting it.
+%% through one call shape.
+%%
+%% THE EQUIVALENCE IS NOW MEASURED, NOT ASSERTED, AND NO LONGER OWED. An earlier
+%% version of this note said robo_pilot_tests proved it. That was wrong twice
+%% over: robo_pilot_tests cannot reach the archived champions, which live in the
+%% research repository, and until 2026-07-30 no run had compared this module
+%% against the runner it was copied from. That replay has now been done. All 20
+%% archived arm S champions were driven through both controllers over all 80
+%% pre-registered held-out starts in both seats: 3200 matches, 599859 turns,
+%% 0 intent divergences, 0 pilot-state mismatches, and every individual match
+%% outcome identical to the phase 0 feed, all 20 seeds agreeing exactly on wins,
+%% losses and draws. The suite was also shown able to go red, by three named
+%% corruptions of a copy of this module. The record is
+%%   faber-programmes/programmes/p7_coevolution/exp066_competence_floor/
+%%     exp066_pilot_extraction_equivalence.txt
+%% Scope, from that record: equivalence is established on the states those 3200
+%% matches visit, against the predictive_gun floor bot, for arm S genomes of
+%% topology 17-12-5. It is not a proof over all inputs. robo_pilot_tests below is
+%% the contract, the boundary and the golden vector, and it is not that proof.
 %%
 %% THE PERCEPTION BOUNDARY IS A SHAPE, NOT A COMMENT. act/4 destructures the arena
 %% to its scans field and to NOTHING ELSE, so #arena.tanks and #arena.bullets are

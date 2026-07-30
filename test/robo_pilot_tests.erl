@@ -18,8 +18,18 @@
 %% champions through this module and reproduce their held-out win rates exactly.
 %% Those champions live in faber-programmes beside the experiment that produced
 %% them, and the engine must not depend on the research repository, so that test
-%% belongs there and is named in this front's records as owed. What is here is the
-%% contract, the boundary and the golden vector.
+%% lives there. IT IS NO LONGER OWED. It was run on 2026-07-30 and it PASSED:
+%% 20 archived arm S champions over all 80 pre-registered held-out starts in both
+%% seats, 3200 matches and 599859 turns, 0 intent divergences, 0 pilot-state
+%% mismatches, all 20 per-seed held-out rates reproduced exactly and every
+%% individual match outcome identical, with the median held-out win rate 0.9750
+%% in all three compared columns. The record is
+%%   faber-programmes/programmes/p7_coevolution/exp066_competence_floor/
+%%     exp066_pilot_extraction_equivalence.txt
+%% Read the two together. That record covers the states 3200 matches against one
+%% scripted opponent visit; what is here is the contract, the boundary and the
+%% golden vector, which is what covers a mistyped constant nothing in that
+%% opponent's matches happens to expose.
 %% @end
 -module(robo_pilot_tests).
 
