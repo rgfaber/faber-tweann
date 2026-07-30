@@ -17,7 +17,35 @@
 -define(MAXGEN, 500).
 -define(RUNS, 10).
 
-experiment_test_() -> {setup, fun s/0, fun(_) -> ok end, {timeout, 40000, fun go/0}}.
+%% OPT-IN, BECAUSE THIS IS AN EXPERIMENT AND NOT A TEST.
+%%
+%% This module evolves a population of 30 for 500 generations, 10 runs, across
+%% three arms, with a eunit timeout of 40,000 seconds. The header above already
+%% says how it is meant to be run: "Runs on msi00 (8 cores) under tmux. --module
+%% only." It was never intended to run on `rebar3 eunit`.
+%%
+%% It ran anyway. rebar3 compiles and runs everything under test/, so every plain
+%% `rebar3 eunit` started an eleven-hour experiment. That is what a full suite run
+%% was actually doing while it appeared to hang: the completed-test count sat
+%% still for many minutes at exactly this module while the log grew past 12 MB,
+%% because each evolved phenotype spawns neurons which then time out waiting for
+%% inputs nothing sends. Roughly ten of those were dying every second.
+%%
+%% It is the ONLY module in the repository with a timeout above 1,000 seconds.
+%% The other eight integration tests run between 30 and 300 seconds and are left
+%% exactly as they are: this is one outlier by a factor of 130, not a class.
+%%
+%% NOTHING IS DELETED OR WEAKENED. The experiment is unchanged and still runs in
+%% full, it just has to be ASKED for. The skip prints its own instructions, so a
+%% reader who wonders where it went is told in the same line.
+experiment_test_() -> experiment(os:getenv("FABER_RUN_EXPERIMENTS")).
+
+experiment(false) ->
+    {"EXP-023 is an experiment, not a test: pop 30 x 500 generations x 10 runs x "
+     "3 arms. SKIPPED by default so `rebar3 eunit` stays usable. To run it: "
+     "FABER_RUN_EXPERIMENTS=1 rebar3 eunit --module=exp023_tests", []};
+experiment(_Requested) ->
+    {setup, fun s/0, fun(_) -> ok end, {timeout, 40000, fun go/0}}.
 
 s() ->
     {ok, _} = application:ensure_all_started(faber_tweann),

@@ -112,7 +112,7 @@ init(Opts) ->
     RoPids = maps:get(ro_pids, Opts, []),
     InputWeights = maps:get(input_weights, Opts, #{}),
     Bias = maps:get(bias, Opts, 0.0),
-    InputTimeout = maps:get(input_timeout, Opts, ?DEFAULT_INPUT_TIMEOUT),
+    InputTimeout = maps:get(input_timeout, Opts, default_input_timeout()),
 
     State = #state{
         id = Id,
@@ -462,3 +462,29 @@ handle_backup(State) ->
     },
 
     CortexPid ! {backup, Id, InputWeights, Bias, LtcParams}.
+
+%% THE DEFAULT IS CONFIGURABLE, and it is a 30 second wedge if it is not.
+%%
+%% A neuron that never receives its inputs waits ?DEFAULT_INPUT_TIMEOUT and does
+%% that ?MAX_TIMEOUT_COUNT times before terminating, so one orphaned neuron costs
+%% 30 seconds. Under test that is the difference between a suite that runs in
+%% seconds and one that grinds for many minutes emitting megabytes of warnings,
+%% which is what it was doing: a full eunit run reached 11 MB of timeout warnings
+%% while the completed-test count sat still.
+%%
+%% Reading the default from application env changes nothing in production, where
+%% the env key is unset and the macro still applies. It gives a test run a way to
+%% say "an orphan should die quickly" without every caller having to pass the
+%% option, and without deleting or skipping any test. The leak that produces the
+%% orphans is a separate defect and is NOT fixed here; this only stops it costing
+%% half a minute each time.
+%% Under the test profile rebar3 defines TEST, so a suite gets a short default
+%% and an orphan dies in under a second. Production never sees this clause. The
+%% env key overrides in both, so a specific test can still ask for a long wait.
+-ifdef(TEST).
+default_input_timeout() ->
+    application:get_env(faber_tweann, neuron_input_timeout, 250).
+-else.
+default_input_timeout() ->
+    application:get_env(faber_tweann, neuron_input_timeout, ?DEFAULT_INPUT_TIMEOUT).
+-endif.
