@@ -41,7 +41,7 @@
 
 -include("robo_sim.hrl").
 
--export([battle/1, battle/2, place/1, engine_id/0]).
+-export([battle/1, battle/2, replay/2, place/1, engine_id/0]).
 
 -define(FP, 256).
 
@@ -63,16 +63,38 @@ battle(Entrants, Opts) when is_list(Entrants) ->
     start(Entrants, Opts, admit(Entrants));
 battle(_Entrants, _Opts) -> {error, entrants_not_a_list}.
 
+%% THE SAME BATTLE, PLUS EVERY FRAME. A spectator needs positions per turn and a
+%% result carries none, because a result is what travels: two genomes and a start
+%% index are ~1.2 KB and a fight is ~200 frames, so frames are regenerated where
+%% they are watched rather than shipped there.
+%%
+%% This is NOT a second simulation. It is battle/2 with the frame accumulator
+%% switched on, so what a viewer draws is what the rumbler counted by
+%% construction, and there is no lookalike loop to drift out of step. The terminal
+%% watcher used to carry its own copy of the loop; that was one refactor away from
+%% showing a fight nobody actually fought.
+-spec replay([entrant()], map()) -> {ok, map()} | {error, term()}.
+replay(Entrants, Opts) when is_list(Entrants) ->
+    start(Entrants, Opts#{frames => true}, admit(Entrants));
+replay(_Entrants, _Opts) -> {error, entrants_not_a_list}.
+
 start(_Entrants, _Opts, {error, _} = E) -> E;
 start(Entrants, Opts, ok) ->
     Ids = [Id || {Id, _} <- Entrants],
     Placed = placement(length(Entrants), Opts),
     Arena = robo_sim:new([{Id, X, Y, H} || {Id, {X, Y, H}} <- lists:zip(Ids, Placed)]),
     States = [{Id, init_one(Spec)} || {Id, Spec} <- Entrants],
-    Result = loop(Arena, Entrants, States, #{}),
+    Result = loop(Arena, Entrants, States, #{}, collector(Opts)),
     {ok, Result#{entrants => manifest(Entrants, Placed),
                  engine => engine_id(),
                  placement => placement_note(Opts)}}.
+
+%% `false' is OFF, and off costs one function call per turn rather than a list of
+%% every arena state. A visit is 6,400 battles of ~200 turns; accumulating frames
+%% unconditionally would allocate 1.28 million of them to throw all but the last
+%% away.
+collector(#{frames := true}) -> [];
+collector(_Opts) -> false.
 
 %% HOW THE ENTRANTS WERE PLACED, honestly. The first version reported
 %% placement_radius unconditionally, which is a real-looking number describing
@@ -124,14 +146,35 @@ init_one({script, Kind}) -> {script, robo_gauntlet:init(Kind)}.
 %% fails.
 %%==============================================================================
 
-loop(Arena, Specs, States, Deaths) ->
-    step(Arena, Specs, States, note_deaths(Arena, Deaths), robo_sim:finished(Arena)).
+loop(Arena, Specs, States, Deaths, Frames) ->
+    step(Arena, Specs, States, note_deaths(Arena, Deaths), snap(Frames, Arena),
+         robo_sim:finished(Arena)).
 
-step(Arena, Specs, _States, Deaths, true) -> report(Arena, Specs, Deaths);
-step(Arena, Specs, States, Deaths, false) ->
+step(Arena, Specs, _States, Deaths, Frames, true) ->
+    filmed(report(Arena, Specs, Deaths), Frames);
+step(Arena, Specs, States, Deaths, Frames, false) ->
     Acted = [act_one(T, Specs, States, Arena) || T <- robo_sim:alive(Arena)],
     Intents = [{Id, I} || {Id, I, _S} <- Acted],
-    loop(robo_sim:step(Arena, Intents), Specs, merge(Acted, States), Deaths).
+    loop(robo_sim:step(Arena, Intents), Specs, merge(Acted, States), Deaths, Frames).
+
+snap(false, _Arena) -> false;
+snap(Frames, Arena) -> [frame(Arena) | Frames].
+
+filmed(Result, false) -> Result;
+filmed(Result, Frames) -> Result#{frames => lists:reverse(Frames)}.
+
+%% WHAT A VIEWER NEEDS AND NOTHING ELSE. Positions, headings, energy, who is dead,
+%% and the bullets in flight. Not scans: seventeen channels per tank per turn is
+%% the bulk of an arena and a spectator draws none of it.
+%%
+%% Coordinates leave in FIXED POINT, the engine's own units, because a viewer
+%% scales to its own canvas and dividing here would round twice.
+frame(#arena{turn = Turn, tanks = Tanks, bullets = Bullets}) ->
+    #{turn => Turn,
+      tanks => [#{id => Id, x => X, y => Y, heading => H, energy => E, dead => D}
+                || #tank{id = Id, x = X, y = Y, heading = H, energy = E, dead = D}
+                       <- Tanks],
+      bullets => [#{x => X, y => Y} || #bullet{x = X, y = Y} <- Bullets]}.
 
 act_one(#tank{id = Id} = T, Specs, States, Arena) ->
     {Id, Spec} = lists:keyfind(Id, 1, Specs),

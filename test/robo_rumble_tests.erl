@@ -256,6 +256,65 @@ engine_id_is_stable_within_a_build_test() ->
     ?assertEqual(32, byte_size(robo_rumble:engine_id())).
 
 %%==============================================================================
+%% Replay, which is how a spectator sees a fight
+%%==============================================================================
+
+%% THE PROPERTY THE WHOLE VIEWER RESTS ON: replay is battle, not a lookalike. If
+%% these two could ever disagree, a spectator would watch a fight that nobody
+%% fought, and the disagreement would be invisible because both halves would look
+%% entirely reasonable.
+replay_is_the_same_battle_test() ->
+    E = [{a, {script, predictive_gun}}, {b, {script, sitting_duck}}],
+    {ok, B} = robo_rumble:battle(E),
+    {ok, R} = robo_rumble:replay(E, #{}),
+    ?assertEqual(B, maps:remove(frames, R)).
+
+%% One frame per turn INCLUDING the final state, so the last thing drawn is the
+%% arena the verdict was read from rather than the turn before it.
+one_frame_per_turn_test() ->
+    {ok, R} = robo_rumble:replay([{a, {script, predictive_gun}},
+                                  {b, {script, sitting_duck}}], #{}),
+    ?assertEqual(maps:get(turns, R) + 1, length(maps:get(frames, R))),
+    ?assertEqual(lists:seq(0, maps:get(turns, R)),
+                 [maps:get(turn, F) || F <- maps:get(frames, R)]).
+
+%% A frame carries what a viewer draws and nothing else. Scans especially are
+%% absent: seventeen channels per tank per turn is most of an arena's bulk and
+%% no spectator draws a single one.
+frames_carry_what_a_viewer_draws_test() ->
+    {ok, R} = robo_rumble:replay([{a, {script, predictive_gun}},
+                                  {b, {script, sitting_duck}}], #{}),
+    F = hd(maps:get(frames, R)),
+    ?assertEqual([bullets, tanks, turn], lists:sort(maps:keys(F))),
+    [T | _] = maps:get(tanks, F),
+    ?assertEqual([dead, energy, heading, id, x, y], lists:sort(maps:keys(T))),
+    ?assertEqual(2, length(maps:get(tanks, F))).
+
+%% Positions have to MOVE. A frame list of identical arenas would satisfy every
+%% count above and show a still photograph 200 times.
+frames_show_movement_test() ->
+    {ok, R} = robo_rumble:replay([{a, {script, predictive_gun}},
+                                  {b, {script, circle_strafer}}], #{}),
+    Paths = [{maps:get(x, T), maps:get(y, T)}
+             || F <- maps:get(frames, R), T <- maps:get(tanks, F),
+                maps:get(id, T) =:= b],
+    ?assert(length(lists:usort(Paths)) > 1).
+
+%% Frames are OFF by default and that is a cost decision, not a style one: a
+%% visit runs 6,400 battles, so collecting frames unconditionally would allocate
+%% over a million of them to throw all but the last away.
+battle_collects_no_frames_test() ->
+    {ok, B} = robo_rumble:battle([{a, {script, predictive_gun}},
+                                  {b, {script, sitting_duck}}]),
+    ?assertNot(maps:is_key(frames, B)).
+
+%% A refused battle is refused the same way through either door.
+replay_refuses_what_battle_refuses_test() ->
+    Bad = {[16, 5], zeros(robo_net:weight_count([16, 5]))},
+    E = [{visitor, {genome, Bad}}, {house, {script, sitting_duck}}],
+    ?assertEqual(robo_rumble:battle(E), robo_rumble:replay(E, #{})).
+
+%%==============================================================================
 %% Fixtures
 %%==============================================================================
 
