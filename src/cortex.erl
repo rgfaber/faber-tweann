@@ -328,7 +328,7 @@ cortex_cycle_decision(Halt, CycleAcc, FitnessAcc, CycleCount, _MaxCycles, State)
 
 %% @private Trigger all sensors to begin another sense-think-act cycle.
 trigger_sensors(#state{sensor_pids = SensorPids, event_driven = false}) ->
-    [ SensorPid ! {cortex, sync} || SensorPid <- SensorPids ],
+    lists:foreach(fun(SensorPid) -> SensorPid ! {cortex, sync} end, SensorPids),
     ok;
 trigger_sensors(#state{id = Id, event_driven = true}) ->
     network_pubsub:publish(Id, evaluation_cycle_started, #{cortex_pid => self()}),

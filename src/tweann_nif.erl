@@ -590,9 +590,16 @@ weight_distance_l2(Weights1, Weights2) ->
     end.
 
 %% @doc Batch compute weight distances from target to many others.
--spec weight_distance_batch(Target :: [float()], Others :: [[float()]], UseL2 :: boolean()) -> [{non_neg_integer(), float()}].
-weight_distance_batch(Target, Others, UseL2) ->
+%% ⚠ The metric is an ATOM and the result is a plain distance list, in input
+%% order. This spec used to say boolean() and [{Index, Distance}], describing an
+%% older native implementation that was changed on both counts; the Rust source
+%% records the change, the fallback and the faber_nn_nifs wrapper were both
+%% updated, and this dispatcher was missed. A caller following the old spec got
+%% a badarg on the boolean, which is why the divergence was never exercised.
+-spec weight_distance_batch(Target :: [float()], Others :: [[float()]],
+                            Metric :: l1 | l2) -> [float()].
+weight_distance_batch(Target, Others, Metric) ->
     case impl_module() of
-        faber_nn_nifs -> faber_nn_nifs:weight_distance_batch(Target, Others, UseL2);
-        _ -> tweann_nif_fallback:weight_distance_batch(Target, Others, UseL2)
+        faber_nn_nifs -> faber_nn_nifs:weight_distance_batch(Target, Others, Metric);
+        _ -> tweann_nif_fallback:weight_distance_batch(Target, Others, Metric)
     end.

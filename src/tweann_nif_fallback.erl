@@ -552,7 +552,8 @@ mutate_weights(Weights, MutationRate, PerturbRate, PerturbStrength) ->
 %% @doc Mutate weights with specific random seed for reproducibility.
 -spec mutate_weights_seeded([float()], float(), float(), float(), integer()) -> [float()].
 mutate_weights_seeded(Weights, MutationRate, PerturbRate, PerturbStrength, Seed) ->
-    rand:seed(exsss, {Seed, Seed * 2, Seed * 3}),
+    %% Seeding is the point; the returned state is not.
+    _ = rand:seed(exsss, {Seed, Seed * 2, Seed * 3}),
     mutate_weights(Weights, MutationRate, PerturbRate, PerturbStrength).
 
 %% @doc Batch mutate with per-genome parameters.
@@ -574,7 +575,8 @@ random_weights(Count) ->
 %% @doc Generate random weights with specific seed.
 -spec random_weights_seeded(non_neg_integer(), integer()) -> [float()].
 random_weights_seeded(Count, Seed) ->
-    rand:seed(exsss, {Seed, Seed * 2, Seed * 3}),
+    %% Seeding is the point; the returned state is not.
+    _ = rand:seed(exsss, {Seed, Seed * 2, Seed * 3}),
     random_weights(Count).
 
 %% @doc Generate random weights from Gaussian distribution.

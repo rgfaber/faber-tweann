@@ -165,9 +165,7 @@ compute_max_attempts(#exoself_state{tuning_duration_function = undefined,
     Default;
 compute_max_attempts(#exoself_state{tuning_duration_function = {Name, Param},
                                     neuron_ids = NIds, generation = Gen}) ->
-    tuning_duration:duration(Name, Param, NIds, Gen);
-compute_max_attempts(#exoself_state{max_attempts = Default}) ->
-    Default.
+    tuning_duration:duration(Name, Param, NIds, Gen).
 
 %% @private Initialize base state from agent record.
 -spec initialize_base_state(#agent{}, pid() | undefined, atom(), ets:tid()) -> #exoself_state{}.
@@ -543,7 +541,8 @@ loop(State) ->
 -spec report_and_terminate(pid() | undefined, term(), non_neg_integer(),
                            number() | undefined, #exoself_state{}) -> ok.
 report_and_terminate(PopMonitorPid, AgentId, EvalCount, HighestFitness, State) ->
-    case PopMonitorPid of
+    %% The send in the second branch returns the message; nothing wants it.
+    _ = case PopMonitorPid of
         undefined ->
             ok;
         _ ->
@@ -668,7 +667,8 @@ finish(State) ->
 %% clean. xor_sim happens to self-reset on its final case, but relying on that
 %% would break the moment an evaluation is cut short, so reset explicitly.
 reset_scapes(#exoself_state{private_scape_pids = Pids}) ->
-    [ Pid ! {self(), reset} || Pid <- Pids ],
+    Self = self(),
+    lists:foreach(fun(Pid) -> Pid ! {Self, reset} end, Pids),
     ok.
 
 %% @private Reset all neurons between evaluation attempts, two-phase so recurrent
@@ -687,9 +687,9 @@ reset_scapes(#exoself_state{private_scape_pids = Pids}) ->
 %% flushed by a neuron that had not yet reached phase 1.
 reset_neurons(#exoself_state{neuron_pids = NeuronPids}) ->
     Self = self(),
-    [ Pid ! {reset_prep, Self} || Pid <- NeuronPids ],
+    lists:foreach(fun(Pid) -> Pid ! {reset_prep, Self} end, NeuronPids),
     gather_neuron_ready(length(NeuronPids)),
-    [ Pid ! reset || Pid <- NeuronPids ],
+    lists:foreach(fun(Pid) -> Pid ! reset end, NeuronPids),
     ok.
 
 gather_neuron_ready(0) -> ok;

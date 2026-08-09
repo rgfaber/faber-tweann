@@ -199,7 +199,9 @@ process_and_report(State) ->
                 act_on_scape(ActuatorName, Input, ScapePid, Parameters)
         end,
 
-    case EventDriven of
+    %% Both branches produce a value nobody wants: a publish result, or the
+    %% message the send returns.
+    _ = case EventDriven of
         true ->
             %% Event-driven: publish actuator_output_ready
             network_pubsub:publish(NetworkId, actuator_output_ready, #{
@@ -247,17 +249,12 @@ actuate(argmax, Input, _ScapePid, _Parameters) ->
     {_Max, Index, _} = lists:foldl(fun argmax_step/2, {hd(Input), 0, 0}, Input),
     [float(Index)];
 
-actuate(scape, Input, ScapePid, Parameters) ->
-    %% Superseded by act_on_scape/4, which returns fitness. Retained only for
-    %% callers that predate the fitness channel.
-    case ScapePid of
-        undefined ->
-            Input;
-        _ ->
-            {_Fitness, _Halt, Output} =
-                act_on_scape(scape, Input, ScapePid, Parameters),
-            Output
-    end;
+%% Superseded by act_on_scape/4, which returns fitness. The one caller reaches
+%% this only on its ScapePid =:= undefined branch, so a scape is never attached
+%% here; matching undefined in the head says so, and anything else fails loudly
+%% rather than taking a path dialyzer proves is dead.
+actuate(scape, Input, undefined, _Parameters) ->
+    Input;
 
 actuate(_ActuatorName, Input, _ScapePid, _Parameters) ->
     %% Default: pass through
