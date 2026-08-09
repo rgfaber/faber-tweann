@@ -197,7 +197,7 @@ the published pole-balancing literature is possible.
 
 ---
 
-## 8. A genotype that can leave the machine
+## 8. A genotype that can leave the machine — 8b DONE, 8a and 8c open
 
 **Status:** not implemented, and it is the gap that decides whether topology
 evolution is usable by anything outside a single VM.
@@ -234,25 +234,39 @@ layers, and return `{error, not_layerable}` when it is not. Correct the `@doc`.
 An arbitrary or recurrent genotype must refuse rather than approximate, because a
 silent approximation behind an `{ok, _}` is worse than no bridge at all.
 
-**8b. Canonical genotype serialisation.**
+**8b. Canonical genotype serialisation — DONE.**
 
-`genotype` exports `init_db`, `reset_db`, `read`, `write`, `dirty_read`,
-`delete`, `construct_Agent`, `clone_Agent`, `delete_Agent`, three id helpers and
-`update_fingerprint`. There is no `to_binary`, no `from_binary`, no `to_json`, no
-export of any kind. So a genotype cannot be persisted, cannot be put on a wire,
-and cannot be handed to another node.
+Landed as `genotype_codec`, with `genotype:to_binary/1`, `from_binary/1` and
+`genome_id/1` delegating to it. Moved to `README.md` per this file's rule.
 
-Intended: `to_binary/1` and `from_binary/1` with a hand-rolled canonical
-encoding, following `robo_genome`'s discipline. Specifically: not
-`term_to_binary/1`, because its `deterministic` option is not stable across OTP
-releases and so is unfit for a content address; validate and reject rather than
-clamp, because clamping changes the genome and then the published id no longer
-identifies the thing that ran; and explicit size limits as a denial-of-service
-defence.
+Hand-rolled canonical encoding over the closed term subset a genotype actually
+contains (atoms, integers, floats, binaries, proper lists, tuples), refusing
+everything else rather than guessing. Verified against `include/records.hrl`:
+these records contain no maps, and a map is the shape that made the sibling's
+I.12 possible. Lossless, because choosing which fields "matter" would be the
+same silent lossy conversion that 8a is a defect for. Atoms decode through
+`binary_to_existing_atom/2`, so an untrusted genome cannot mint atoms and a
+genome from an incompatible build is refused by name.
 
-This is the item that unblocks the most. It is orthogonal to item 3: item 3 is
-about surviving a VM restart on one machine, this is about a genome being a
-value that can travel.
+Two things learned by building it, both recorded because they are the kind of
+thing that gets re-derived wrongly:
+
+- **The VM cannot hold a non-finite float.** Arithmetic raises `badarith` rather
+  than overflowing, and the bit syntax refuses to match infinity and NaN
+  patterns. A finiteness check on the encode side is therefore defensive code
+  for an impossible state. The check belongs only on decode, where bytes arrive
+  from elsewhere.
+- **A round-trip assertion cannot see a canonicality regression.** The first
+  version of the zero-normalisation test passed with and without the
+  normalisation it was named after, because both forms are deterministic and
+  both round-trip. Found by injecting the regression rather than by reading.
+  It asserts the bytes now. Three regressions were injected in total; two were
+  caught by the tests as written and the third was not, which is why the count
+  is worth stating.
+
+Still true and worth keeping in view: this is orthogonal to item 3. Item 3 is
+surviving a VM restart on one machine; this is a genome being a value that can
+travel.
 
 **8c. ONNX from an arbitrary DAG.**
 

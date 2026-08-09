@@ -67,10 +67,18 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
 ## Features
 
 ### Neural Network Evolution
-- **Topology Evolution**: Networks add/remove neurons and connections
+- **Topology Evolution**: Networks add neurons and connections. Complexification
+  only: there is no remove-neuron or remove-link operator, so a lineage's
+  structure is monotone non-decreasing. Parsimony pressure is available instead,
+  through `fitness_postprocessor:size_proportional/2`
 - **Weight Evolution**: Synaptic weights optimized through selection
 - **Speciation**: Behavioral diversity preservation (NEAT-style)
 - **Multi-objective**: Pareto dominance optimization
+- **Genotype serialization**: `genotype:to_binary/1`, `from_binary/1` and
+  `genome_id/1`. Canonical and lossless, so an evolved topology can be
+  persisted, sent to another node, and content-addressed. Hand-rolled rather
+  than `term_to_binary/2`, whose `deterministic` option is not stable across OTP
+  releases and is therefore unfit for an address
 
 ### LTC/CfC Neurons
 - **Temporal Memory**: Neurons maintain persistent internal state

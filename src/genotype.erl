@@ -67,6 +67,12 @@
     clone_Agent/1,
     delete_Agent/1,
 
+    %% Serialisation (ROADMAP 8b) - see genotype_codec for the wire format and
+    %% for why it is hand-rolled rather than term_to_binary/2.
+    to_binary/1,
+    from_binary/1,
+    genome_id/1,
+
     %% Utility
     generate_UniqueId/0,
     generate_id/1,
@@ -629,3 +635,22 @@ update_cloned_elements(actuator, Ids, IdMap) ->
         end,
         Ids
     ).
+
+%%==============================================================================
+%% Serialisation (ROADMAP 8b)
+%%
+%% Thin delegations. The encoding, its limits and the reasoning behind both live
+%% in genotype_codec, which is testable without a populated table.
+%%==============================================================================
+
+%% @doc Pack an agent and everything its cortex names into canonical bytes.
+-spec to_binary(term()) -> {ok, binary()} | {error, genotype_codec:reason()}.
+to_binary(Agent_Id) -> genotype_codec:to_binary(Agent_Id).
+
+%% @doc Restore a packed genotype into the local tables, verbatim.
+-spec from_binary(binary()) -> {ok, term()} | {error, genotype_codec:reason()}.
+from_binary(Bin) -> genotype_codec:from_binary(Bin).
+
+%% @doc The content address of a genotype, from an agent id or from packed bytes.
+-spec genome_id(binary() | term()) -> {ok, binary()} | {error, genotype_codec:reason()}.
+genome_id(Subject) -> genotype_codec:genome_id(Subject).
