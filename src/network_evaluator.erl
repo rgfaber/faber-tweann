@@ -335,18 +335,28 @@ evaluate(#network{layers = Layers, activation = Activation,
     OA = resolve_output_activation(OutputActivation, Activation),
     forward_propagate(Layers, Inputs, Activation, OA).
 
-%% @doc Load a network from a genotype stored in ETS.
+%% @doc Load a network from a genotype stored in ETS, weights included.
 %%
-%% Reads the agent's neural network structure and weights from Mnesia
-%% and creates an evaluator network.
+%% Faithful or nothing. A genotype whose topology cannot be represented as a
+%% stack of dense layers returns {error, {not_layerable, Why}} naming what
+%% stopped it, rather than an approximation reported as success.
+%%
+%% Until ROADMAP 8a this function counted the neurons, invented a layer shape
+%% and filled it with random weights, while its own doc claimed to read the
+%% weights from Mnesia. There is no Mnesia and there were no weights. See
+%% genotype_to_network for the five conditions that make a genotype
+%% unconvertible.
+%%
+%% Note this drops per-synapse tuning state (delta, learning rate, parameters),
+%% because the evaluator has nowhere to hold it. A converted network is an
+%% inference artifact, not a resumable genotype.
 %%
 %% @param AgentId The agent identifier
 %% @returns {ok, Network} | {error, Reason}
 -spec from_genotype(term()) -> {ok, network()} | {error, term()}.
 from_genotype(AgentId) ->
-    case load_genotype_structure(AgentId) of
-        {ok, Structure} ->
-            Network = build_network_from_structure(Structure),
+    case genotype_to_network:convert(AgentId) of
+        {ok, Network} ->
             {ok, Network};
         {error, Reason} ->
             {error, Reason}
@@ -643,80 +653,6 @@ build_nif_layer_nodes(WeightMatrix, Biases, CurrentLayerStart, Acc, InputNodes,
         WeightMatrix,
         Biases
     ).
-
-%% @private Load genotype structure from ETS
-load_genotype_structure(AgentId) ->
-    case genotype:dirty_read({agent, AgentId}) of
-        undefined ->
-            {error, agent_not_found};
-        Agent ->
-            load_cortex_structure(Agent)
-    end.
-
-%% @private Load the cortex and its sensors/neurons/actuators for an agent.
-load_cortex_structure(Agent) ->
-    CxId = element(3, Agent), %% #agent.cx_id
-    case genotype:dirty_read({cortex, CxId}) of
-        undefined ->
-            {error, cortex_not_found};
-        Cortex ->
-            %% Load neurons
-            NeuronIds = element(5, Cortex), %% #cortex.neuron_ids
-            Neurons = [genotype:dirty_read({neuron, NId})
-                       || NId <- NeuronIds],
-
-            %% Load sensors for input count
-            SensorIds = element(6, Cortex), %% #cortex.sensor_ids
-            Sensors = [genotype:dirty_read({sensor, SId})
-                       || SId <- SensorIds],
-
-            %% Load actuators for output count
-            ActuatorIds = element(7, Cortex), %% #cortex.actuator_ids
-            Actuators = [genotype:dirty_read({actuator, AId})
-                         || AId <- ActuatorIds],
-
-            {ok, {Sensors, Neurons, Actuators}}
-    end.
-
-%% @private Build network from genotype structure
-%%
-%% NOTE: This creates a feedforward approximation of the evolved topology.
-%% TWEANN genotypes have arbitrary topology (including recurrent connections)
-%% which cannot be represented in the matrix-based feedforward format used
-%% by network_evaluator. For exact topology evaluation, use:
-%%   tweann_nif:compile_network/3 + tweann_nif:evaluate/2
-%% which supports arbitrary DAG and recurrent topologies.
-%%
-%% This function is primarily useful for visualization and analysis where
-%% a feedforward approximation is acceptable.
-build_network_from_structure({Sensors, Neurons, Actuators}) ->
-    %% Calculate sizes
-    InputSize = lists:sum([element(8, S) || S <- Sensors]), %% #sensor.vl
-    OutputSize = lists:sum([element(7, A) || A <- Actuators]), %% #actuator.vl
-    HiddenCount = length(Neurons),
-
-    %% Create a feedforward approximation with similar structure
-    %% Cannot preserve exact topology due to format limitations
-    HiddenSizes = case HiddenCount of
-        0 -> [];
-        N when N < 10 -> [N];
-        N -> [N div 2, N div 2]
-    end,
-
-    %% Create network with random weights (topology approximation only)
-    %% For exact weight reproduction, use tweann_nif:compile_network/3
-    create_feedforward(InputSize, HiddenSizes, OutputSize).
-
-%%==============================================================================
-%% Visualization Functions
-%%==============================================================================
-
-%% @doc Evaluate network and return all layer activations.
-%%
-%% Returns {Outputs, AllActivations} where AllActivations is a list of
-%% activation vectors for each layer (including input and output).
--spec evaluate_with_activations(network(), [float()]) ->
-    {Outputs :: [float()], Activations :: [[float()]]}.
 evaluate_with_activations(#network{layers = Layers, activation = Activation,
                                    output_activation = OutputActivation}, Inputs) ->
     OA = resolve_output_activation(OutputActivation, Activation),
