@@ -63,6 +63,8 @@ to_onnx(Network, Opts) ->
         ModelProto = build_model(Network, Opts),
         {ok, ModelProto}
     catch
+        throw:{onnx, Reason} ->
+            {error, Reason};
         error:Reason:Stack ->
             {error, {onnx_export_failed, Reason, Stack}}
     end.
@@ -73,14 +75,14 @@ to_onnx(Network, Opts) ->
 
 %% @private Build the complete ONNX ModelProto
 build_model(Network, Opts) ->
-    {Layers, Activation} = get_network_data(Network),
+    {Layers, Activation, OutputActivation} = get_network_data(Network),
     LayerSizes = get_layer_sizes(Layers),
 
     ModelName = maps:get(model_name, Opts, <<"macula_network">>),
     Producer = maps:get(producer, Opts, <<"faber-tweann">>),
 
     %% Build graph
-    GraphProto = build_graph(Layers, Activation, LayerSizes, ModelName),
+    GraphProto = build_graph(Layers, Activation, OutputActivation, LayerSizes, ModelName),
 
     %% Build model
     encode_model_proto(#{
@@ -99,10 +101,26 @@ build_model(Network, Opts) ->
 %% silently broke when neuron_meta and internal_state were added to the
 %% network record for CfC/LTC support: every export began returning
 %% {error, {onnx_export_failed, function_clause, _}}.
+%% ⚠ The output activation is part of this, and used not to be. The export
+%% ignored it and applied the hidden activation to every layer, so a network with
+%% relu hidden and linear output exported as relu-on-the-output and returned 0.0
+%% where the evaluator returned -0.676. It only shows when the two activations
+%% DIFFER, which is why nothing caught it: every test network used the same one
+%% for both. Found by scripts/check_onnx_export.py, which runs the exported model
+%% in onnxruntime and compares against network_evaluator:evaluate/2.
 get_network_data(Network) when is_tuple(Network), element(1, Network) =:= network ->
-    {network_evaluator:get_layers(Network), network_evaluator:get_activation(Network)};
-get_network_data(#{layers := Layers, activation := Activation}) ->
-    {Layers, Activation}.
+    {network_evaluator:get_layers(Network),
+     network_evaluator:get_activation(Network),
+     resolved_output_activation(network_evaluator:get_output_activation(Network),
+                                network_evaluator:get_activation(Network))};
+get_network_data(#{layers := Layers, activation := Activation} = M) ->
+    {Layers, Activation,
+     resolved_output_activation(maps:get(output_activation, M, undefined), Activation)}.
+
+%% undefined means "same as the hidden activation", matching
+%% network_evaluator's own resolution.
+resolved_output_activation(undefined, Activation) -> Activation;
+resolved_output_activation(OutputActivation, _Activation) -> OutputActivation.
 
 %% @private Calculate layer sizes from weight matrices
 get_layer_sizes([]) -> [];
@@ -116,14 +134,15 @@ get_layer_sizes([{Weights, _Biases} | Rest]) ->
 %%==============================================================================
 
 %% @private Build the ONNX GraphProto
-build_graph(Layers, Activation, LayerSizes, Name) ->
+build_graph(Layers, Activation, OutputActivation, LayerSizes, Name) ->
     InputSize = hd(LayerSizes),
     OutputSize = lists:last(LayerSizes),
 
     %% Build nodes (operations)
     {Nodes, _} = lists:foldl(
         fun({Weights, Biases}, {Acc, LayerIdx}) ->
-            LayerNodes = build_layer_nodes(LayerIdx, Weights, Biases, Activation, length(Layers)),
+            LayerNodes = build_layer_nodes(LayerIdx, Weights, Biases, Activation,
+                                           OutputActivation, length(Layers)),
             {Acc ++ LayerNodes, LayerIdx + 1}
         end,
         {[], 1},
@@ -146,7 +165,7 @@ build_graph(Layers, Activation, LayerSizes, Name) ->
     }).
 
 %% @private Build nodes for a single layer
-build_layer_nodes(LayerIdx, _Weights, _Biases, Activation, NumLayers) ->
+build_layer_nodes(LayerIdx, _Weights, _Biases, Activation, OutputActivation, NumLayers) ->
     IdxStr = integer_to_binary(LayerIdx),
 
     %% Input name
@@ -178,10 +197,16 @@ build_layer_nodes(LayerIdx, _Weights, _Biases, Activation, NumLayers) ->
         NumLayers -> <<"output">>;
         _ -> <<"relu_", IdxStr/binary>>
     end,
+    %% The LAST layer takes the output activation; every other layer takes the
+    %% hidden one. Applying Activation here unconditionally was the defect.
+    LayerActivation = case LayerIdx of
+        NumLayers -> OutputActivation;
+        _ -> Activation
+    end,
     ActNode = encode_node_proto(#{
         input => [AddOut],
         output => [ActOut],
-        op_type => activation_to_onnx(Activation)
+        op_type => activation_to_onnx(LayerActivation)
     }),
 
     [MatMulNode, AddNode, ActNode].
@@ -191,7 +216,12 @@ activation_to_onnx(tanh) -> <<"Tanh">>;
 activation_to_onnx(sigmoid) -> <<"Sigmoid">>;
 activation_to_onnx(relu) -> <<"Relu">>;
 activation_to_onnx(linear) -> <<"Identity">>;
-activation_to_onnx(_) -> <<"Tanh">>.
+%% ⚠ NO CATCH-ALL. This used to end in a clause returning Tanh for anything it
+%% did not recognise, which is the same silent substitution that
+%% network_evaluator's private apply_activation/2 makes, and it would export a
+%% model computing a different function without saying so. An activation with no
+%% ONNX mapping is a refusal.
+activation_to_onnx(Af) -> throw({onnx, {unsupported_activation, Af}}).
 
 %% @private Build initializer tensors for all weights and biases
 build_initializers(Layers) ->

@@ -197,7 +197,7 @@ the published pole-balancing literature is possible.
 
 ---
 
-## 8. A genotype that can leave the machine — 8b DONE, 8a and 8c open
+## 8. A genotype that can leave the machine — 8a and 8b DONE, 8c open
 
 **Status:** not implemented, and it is the gap that decides whether topology
 evolution is usable by anything outside a single VM.
@@ -268,15 +268,50 @@ Still true and worth keeping in view: this is orthogonal to item 3. Item 3 is
 surviving a VM restart on one machine; this is a genome being a value that can
 travel.
 
-**8c. ONNX from an arbitrary DAG.**
+**8c. ONNX from an arbitrary DAG — STILL OPEN. The LAYERABLE path is now
+verified, which it was not before, and two defects in it were fixed on the way.**
 
-`network_onnx:to_onnx/1` is `-spec to_onnx(network_evaluator:network())`, so it
-takes only the dense-layer representation and cannot export an evolved topology.
+⚠ Read the status precisely. Arbitrary-DAG export is **not implemented**. What
+changed is that the dense-layer path it would extend is no longer unverified.
 
-Real work, and the largest of the three. Note that the evaluation half already
-exists: `tweann_nif:compile_network/3` and `tweann_nif:evaluate/2` handle
-arbitrary DAG and recurrent topologies exactly. What is missing is serialisation
-on either side of a runtime that is already there.
+**What was wrong, and how it was found.** Every eunit test for `network_onnx`
+asserted only that bytes came out and that there were more than zero of them.
+Nothing ever loaded a model, so nothing could see whether the exported graph
+computed the right function. `scripts/check_onnx_export.escript` and
+`scripts/check_onnx_export.py` now run the exported model in onnxruntime and
+compare against `network_evaluator:evaluate/2`. That is a guard comparing two
+sides of a boundary, and the first run failed 1 of 4.
+
+1. **The output activation was ignored.** `get_network_data/1` never read
+   `get_output_activation/1`, and the hidden activation was applied to every
+   layer including the last. A relu-hidden, linear-output network exported with
+   relu on its output: onnxruntime returned 0.0 where the evaluator returned
+   -0.676. **Invisible whenever the two activations are equal**, which is what
+   every pre-existing test used.
+2. **`activation_to_onnx/1` ended in a catch-all returning Tanh.** The same
+   silent substitution as `network_evaluator`'s private `apply_activation/2`, so
+   an activation with no ONNX mapping exported a model computing something else
+   and said nothing. Now a refusal.
+
+Both fixed, both with eunit regressions that do not need Python. The script
+covers seven cases and all seven agree, including one that goes the whole way:
+a genotype that only ever existed in ETS, through `from_genotype/1` (item 8a),
+to ONNX, to onnxruntime, at delta 0.0. **That is the first evidence that an
+evolved controller can actually leave the BEAM**, as opposed to the claim that
+it can.
+
+**What remains for 8c proper.** `to_onnx/1` is still
+`-spec to_onnx(network_evaluator:network())`, so it takes only the dense-layer
+representation. An evolved topology that is recurrent, or that skips or crosses
+layers, is refused by 8a's converter and therefore cannot reach the exporter at
+all. Exporting those needs a topological sort, per-neuron Gather and Concat to
+assemble arbitrary predecessor sets, and Loop or Scan for recurrence.
+
+Note the evaluation half already exists: `tweann_nif:compile_network/3` and
+`tweann_nif:evaluate/2` handle arbitrary DAG and recurrent topologies exactly.
+What is missing is serialisation on either side of a runtime that is there. And
+the work now has a harness that can tell whether it is right, which is the part
+it did not have before.
 
 ## Not planned
 

@@ -220,3 +220,49 @@ to_onnx_size_scales_with_network_test() ->
     %% Larger network should produce larger binary
     ?assert(byte_size(Binary2) > byte_size(Binary1)).
 
+
+%% ============================================================================
+%% Regressions found by running the exported model, not by reading it
+%%
+%% Every test above this line asserts only that bytes came out and that there
+%% were more than zero of them. None of them loads the model, so none of them
+%% could see that the exported graph computed the wrong function. Two defects
+%% were sitting under that: see scripts/check_onnx_export.py, which is the
+%% guard that compares the two sides of this boundary properly by running the
+%% model in onnxruntime against network_evaluator:evaluate/2.
+%%
+%% These are the cheap eunit versions, so the specific regressions stay caught
+%% on a machine with no Python.
+%% ============================================================================
+
+%% The output layer must carry the OUTPUT activation. The export used to apply
+%% the hidden activation to every layer, so a relu/linear network exported with
+%% relu on its output and returned 0.0 in onnxruntime where the evaluator
+%% returned -0.676. Invisible whenever the two activations are equal, which is
+%% what every other test in this file uses.
+to_onnx_uses_the_output_activation_on_the_last_layer_test() ->
+    Network = network_evaluator:create_feedforward(3, [4], 1, relu, linear),
+    {ok, Binary} = network_onnx:to_onnx(Network),
+    %% linear maps to Identity, and it can only appear on the output layer.
+    ?assertNotEqual(nomatch, binary:match(Binary, <<"Identity">>)),
+    ?assertNotEqual(nomatch, binary:match(Binary, <<"Relu">>)).
+
+to_onnx_keeps_one_activation_when_output_is_undefined_test() ->
+    Network = network_evaluator:create_feedforward(3, [4], 1, tanh, undefined),
+    {ok, Binary} = network_onnx:to_onnx(Network),
+    ?assertNotEqual(nomatch, binary:match(Binary, <<"Tanh">>)),
+    ?assertEqual(nomatch, binary:match(Binary, <<"Identity">>)).
+
+%% activation_to_onnx/1 used to end in a catch-all returning Tanh, so any
+%% activation without an ONNX mapping exported as a model computing something
+%% else, silently. Same shape as the catch-all in network_evaluator's private
+%% apply_activation/2, and refused for the same reason.
+to_onnx_refuses_an_activation_it_cannot_map_test() ->
+    Network = network_evaluator:create_feedforward(2, [3], 1, gaussian, gaussian),
+    ?assertEqual({error, {unsupported_activation, gaussian}},
+                 network_onnx:to_onnx(Network)).
+
+to_onnx_refuses_an_unmappable_output_activation_test() ->
+    Network = network_evaluator:create_feedforward(2, [3], 1, tanh, sin),
+    ?assertEqual({error, {unsupported_activation, sin}},
+                 network_onnx:to_onnx(Network)).
