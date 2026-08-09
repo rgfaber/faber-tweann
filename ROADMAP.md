@@ -197,6 +197,73 @@ the published pole-balancing literature is possible.
 
 ---
 
+## 8. A genotype that can leave the machine
+
+**Status:** not implemented, and it is the gap that decides whether topology
+evolution is usable by anything outside a single VM.
+
+⚠ This section contains one **defect** alongside two capabilities. Recording a
+defect here does not make it a feature; it is here because it is the thing that
+must be fixed before either capability is worth building.
+
+Topology evolution itself works. `genome_mutator` dispatches nine topological
+operators, four LTC and three parametric, over a real genotype graph, with
+crossover, innovation numbering, three selection algorithms, Pareto ranking and
+parsimony pressure. `test/integration/xor_evolves_tests.erl` solves XOR through
+the full process-per-neuron path in 12 to 22 generations, and pole balancing,
+LTC and recurrent evolution have equivalent tests.
+
+What an evolved genotype cannot do is leave the VM it was bred in.
+
+**8a. ⚠ DEFECT: `network_evaluator:from_genotype/1` discards the weights and
+reports success.**
+
+Its `@doc` says it reads the agent's structure *and weights* "from Mnesia". Both
+halves are false: there is no Mnesia (item 3), and no weight is transferred.
+`build_network_from_structure/1` counts the neurons, invents a layer shape
+(`N < 10 -> [N]`, otherwise two layers of `N div 2`) and fills it with **random
+weights**, under its own comment *"Create network with random weights (topology
+approximation only)"*. It then returns `{ok, Network}`.
+
+An evolved champion handed to this function comes back the right size and
+brain-dead, and nothing errors. The truthful note lives on a private function
+three hundred lines below the public promise that contradicts it.
+
+Intended: carry the weights when the evolved topology is representable as dense
+layers, and return `{error, not_layerable}` when it is not. Correct the `@doc`.
+An arbitrary or recurrent genotype must refuse rather than approximate, because a
+silent approximation behind an `{ok, _}` is worse than no bridge at all.
+
+**8b. Canonical genotype serialisation.**
+
+`genotype` exports `init_db`, `reset_db`, `read`, `write`, `dirty_read`,
+`delete`, `construct_Agent`, `clone_Agent`, `delete_Agent`, three id helpers and
+`update_fingerprint`. There is no `to_binary`, no `from_binary`, no `to_json`, no
+export of any kind. So a genotype cannot be persisted, cannot be put on a wire,
+and cannot be handed to another node.
+
+Intended: `to_binary/1` and `from_binary/1` with a hand-rolled canonical
+encoding, following `robo_genome`'s discipline. Specifically: not
+`term_to_binary/1`, because its `deterministic` option is not stable across OTP
+releases and so is unfit for a content address; validate and reject rather than
+clamp, because clamping changes the genome and then the published id no longer
+identifies the thing that ran; and explicit size limits as a denial-of-service
+defence.
+
+This is the item that unblocks the most. It is orthogonal to item 3: item 3 is
+about surviving a VM restart on one machine, this is about a genome being a
+value that can travel.
+
+**8c. ONNX from an arbitrary DAG.**
+
+`network_onnx:to_onnx/1` is `-spec to_onnx(network_evaluator:network())`, so it
+takes only the dense-layer representation and cannot export an evolved topology.
+
+Real work, and the largest of the three. Note that the evaluation half already
+exists: `tweann_nif:compile_network/3` and `tweann_nif:evaluate/2` handle
+arbitrary DAG and recurrent topologies exactly. What is missing is serialisation
+on either side of a runtime that is already there.
+
 ## Not planned
 
 - **Mnesia clustering across nodes.** Single-node `disc_copies` only. Genome
