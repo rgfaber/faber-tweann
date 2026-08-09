@@ -92,6 +92,38 @@ one or an error. ROADMAP items 8a and 8b move to the README; 8c stays open.
   is no remove operator. Complexification only; parsimony pressure is available
   through `fitness_postprocessor:size_proportional/2`.
 
+- **`tweann_nif:weight_distance_batch/3` had a spec wrong on both the argument
+  and the return.** It promised `UseL2 :: boolean()` and
+  `[{non_neg_integer(), float()}]`. The native NIF and the Erlang fallback both
+  take an `l1 | l2` atom and return a plain distance list in input order, and
+  the Rust source records that it previously took a boolean and was changed. The
+  fallback and the `faber_nn_nifs` wrapper were corrected at the time; this
+  dispatcher was missed. A caller following the spec got a `badarg` on the
+  boolean, which is why the disagreement was never exercised.
+
+- **`actuator:actuate/4` carried an unreachable branch for an attached scape**,
+  under a comment saying it was retained for callers that predate the fitness
+  channel. There are no such callers: the single call site reaches it only on
+  its own `undefined` branch. It matches `undefined` in the head now, so a scape
+  arriving there fails loudly rather than taking a path that cannot run.
+
+- **`exoself:compute_max_attempts/1` had a clause that could never match**, since
+  `tuning_duration_function` is `undefined` or a two-tuple and the first two
+  clauses cover both. Removed rather than kept as insurance against a state that
+  cannot occur.
+
+### Housekeeping
+
+- **Dialyzer is clean.** Ten standing warnings are gone. Three were the defects
+  above; the other seven were values built for their side effects and discarded
+  without saying so. Three list comprehensions that existed for their sends are
+  `lists:foreach` now, and four discarded returns are bound explicitly.
+- **The documentation build works.** `rebar3 ex_doc` had been failing with fatal
+  XML parser errors in five modules, every one a less-than sign inside a doc
+  comment that EDoc reads as an opening tag, plus a bare ampersand in a citation,
+  two doc blocks that had drifted away from the function they described, and a
+  `@doc` on a `-callback`. Zero errors and zero warnings now.
+
 ### Changed
 
 - Package links and `ex_doc` `source_url` now point at GitHub, which has been
