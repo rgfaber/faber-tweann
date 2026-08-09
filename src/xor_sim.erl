@@ -30,7 +30,7 @@
 %% arbitrary and would drift with the epsilon.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(xor_sim).
 -behaviour(scape).
 

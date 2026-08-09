@@ -197,7 +197,6 @@ initialize_base_state(Agent, PopMonitorPid, OpMode, IdToProcessMap) ->
         operation_mode = OpMode
     }.
 
-%% @private Spawn all sensor processes.
 %% @private
 %% @doc Forward goal_reached to the population monitor.
 %%

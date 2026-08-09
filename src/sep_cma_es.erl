@@ -21,7 +21,7 @@
 %% scaling ((N+2)/3 on c1 and cmu).
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(sep_cma_es).
 
 -export([evolve/3]).

@@ -381,7 +381,7 @@ muzzle(#tank{x = X, y = Y, vel = V, heading = H}) ->
 bullet_speed(P) -> ?FP * 20 - (3 * ?FP * P) div 10.
 
 %% AUDIT FIX, the third bias. Flight time is to CONTACT, not to the target's
-%% centre: the engine scores a hit at dist < HIT_R, so a bullet stops one hit
+%% centre: the engine scores a hit at dist below HIT_R, so a bullet stops one hit
 %% radius short of the point being aimed at. Dividing the full centre range by
 %% the bullet speed over-estimated the flight by exactly one turn at every range
 %% and power measured, which at power 2.0 against a target at the speed cap is

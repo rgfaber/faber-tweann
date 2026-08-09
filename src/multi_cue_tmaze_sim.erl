@@ -15,7 +15,8 @@
 %%   step delay+3 (J2) -> [0, 0, 0, 1]   recall B
 %% Cue A is on channel 0 ONLY at step 0, so a consumer can detect trial-start
 %% (and reset a plastic net) without mistaking cue B for a new trial.
-%% Actuator (vl 1): Output >= 0 decides +, < 0 decides -, at each junction.
+%% Actuator (vl 1): Output of zero or more decides +, below zero decides -,
+%% at each junction.
 %%
 %% Baselines: trials use all four (A,B) combinations in equal number, so at each
 %% junction a MEMORYLESS "always one way" policy scores exactly half -- fitness 50
@@ -28,7 +29,7 @@
 %% trial count (defaults 4 and 100).
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(multi_cue_tmaze_sim).
 
 -behaviour(scape).

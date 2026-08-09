@@ -30,7 +30,7 @@
 %% its fall check is disabled, exactly as in DXNN2.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(pb_sim).
 
 -behaviour(scape).

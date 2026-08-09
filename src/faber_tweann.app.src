@@ -1,6 +1,6 @@
 {application, faber_tweann,
  [{description, "Faber TWEANN - Topology and Weight Evolving Artificial Neural Networks"},
-  {vsn, "2.0.1"},
+  {vsn, "2.1.0"},
   {registered, [faber_tweann_sup, morphology_registry]},
   {mod, {faber_tweann_app, []}},
   {applications,
@@ -11,8 +11,10 @@
   {env,[]},
   {modules, []},
   {licenses, ["Apache-2.0"]},
-  {links, [{"Codeberg", "https://codeberg.org/rgfaber/faber-tweann"},
-           {"GitHub (mirror)", "https://github.com/rgfaber/faber-tweann"}]},
+  %% GitHub is canonical since 2026-07-26. The Codeberg repository is a
+  %% soon-to-be-deleted copy and is deliberately not linked: a package whose
+  %% only source link 404s is worse than one with a single working link.
+  {links, [{"GitHub", "https://github.com/rgfaber/faber-tweann"}]},
 
   %% Hex package contents.
   %%

@@ -198,7 +198,8 @@ evaluate_with_plasticity(#network{layers = Layers, activation = Activation,
 %% neuromodulatory signal M (typically a reward): dW = M * Eta * (...). This is the
 %% third factor of the classic pre x post x neuromodulator rule -- the piece a fixed
 %% Hebbian rule lacks. M scales the rule's learning rate, so M = 0 freezes learning,
-%% M > 0 reinforces the just-active pathway, M < 0 reverses it. Works for the global
+%% M above zero reinforces the just-active pathway, M below zero reverses it. Works
+%% for the global
 %% ABCD, Oja, and per-connection rule shapes alike (M multiplies the whole update).
 -spec evaluate_with_neuromod(network(), [float()],
                              {float(), float(), float(), float(), float()}
@@ -263,15 +264,15 @@ clamp_weight(X) when X < -10.0 -> -10.0;
 clamp_weight(X) when X > 10.0 -> 10.0;
 clamp_weight(X) -> X.
 
-%% @doc Reset internal state of a CfC network to zeros.
-%%
-%% Call this at the start of each episode to prevent state leakage between
-%% independent evaluation sequences (e.g., between game rounds).
 %% @doc Read the CfC internal state (the memory carrier); undefined for a plain net.
 -spec get_internal_state(network()) -> [[float()]] | undefined.
 get_internal_state(#network{internal_state = State}) ->
     State.
 
+%% @doc Reset internal state of a CfC network to zeros.
+%%
+%% Call this at the start of each episode to prevent state leakage between
+%% independent evaluation sequences (e.g., between game rounds).
 -spec reset_internal_state(network()) -> network().
 reset_internal_state(#network{internal_state = undefined} = Net) ->
     Net;

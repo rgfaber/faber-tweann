@@ -14,7 +14,7 @@
 %% of {NeuronId, Spread}: the neurons to perturb and by how much.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(tuning_selection).
 
 -include("records.hrl").
@@ -36,7 +36,7 @@ select(_Other, Ids, Gen, PR, AP)         -> dynamic(Ids, Gen, PR, AP).
 %% @doc Recently-changed neurons within a randomly chosen age limit.
 %%
 %% The age limit is sqrt(1/rand:uniform()), which is >=1 and usually small
-%% (about 75% of the time <= 2), so most attempts perturb only the last
+%% (about 75% of the time two or fewer), so most attempts perturb only the last
 %% generation or two of neurons, but occasionally reach deeper. Each chosen
 %% neuron's spread is annealed by its age: PR * pi * AnnealingParameter^Age.
 %% If nothing qualifies, perturb the first neuron with full spread.

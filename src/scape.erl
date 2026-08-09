@@ -34,14 +34,14 @@
 %% == Departure from DXNN2 ==
 %%
 %% Sher implements every scape as a function inside one `scape' module
-%% (`scape:xor_sim/1'). Here `scape' is a generic process that dispatches to a
+%% (a scape_xor_sim function inside it). Here `scape' is a generic process that dispatches to a
 %% callback module implementing the `scape' behaviour. The morphologies already
 %% declare scapes as atoms (`scape = {private, xor_sim}'), so dispatching to a
 %% module of that name is both more faithful to the declaration and extensible
 %% without editing a shared file. The wire protocol is unchanged.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(scape).
 
 -export([gen/2, gen/3, prep/1]).
@@ -50,17 +50,17 @@
 %%% Behaviour
 %%%============================================================================
 
-%% @doc Initialise scape state. Called once when the scape process starts.
+%% Initialise scape state. Called once when the scape process starts.
 -callback init(Params :: term()) -> State :: term().
 
-%% @doc Produce the sensory vector for the current state.
+%% Produce the sensory vector for the current state.
 %%
 %% SensorName lets one scape serve several sensors (DXNN2's pole balancing
 %% uses this to offer full or partial state information).
 -callback sense(SensorName :: atom(), Params :: term(), State :: term()) ->
     {SensoryVector :: [float()], State :: term()}.
 
-%% @doc Apply the network's output and return fitness for this step.
+%% Apply the network's output and return fitness for this step.
 %%
 %% HaltFlag: 0 continue, 1 end the evaluation, `goal_reached' when solved.
 %%

@@ -9,7 +9,7 @@
 %% Ported from Gene Sher's DXNN2 (Handbook Ch 8).
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(tuning_duration).
 
 -include("records.hrl").

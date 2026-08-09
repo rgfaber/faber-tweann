@@ -13,11 +13,11 @@
 %% (mu_lambda_es_tests) independently of network evaluation; wiring it to a
 %% fixed-topology network's weight vector is EXP-025.
 %%
-%% Reference: Beyer & Schwefel 2002, "Evolution strategies - a comprehensive
+%% Reference: Beyer and Schwefel 2002, "Evolution strategies - a comprehensive
 %% introduction"; Rechenberg / Schwefel.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(mu_lambda_es).
 
 -export([evolve/3]).

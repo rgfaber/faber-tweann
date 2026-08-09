@@ -75,6 +75,7 @@ to_onnx(Network, Opts) ->
 
 %% @private Build the complete ONNX ModelProto
 build_model(Network, Opts) ->
+    ok = refuse_stateful(Network),
     {Layers, Activation, OutputActivation} = get_network_data(Network),
     LayerSizes = get_layer_sizes(Layers),
 
@@ -121,6 +122,34 @@ get_network_data(#{layers := Layers, activation := Activation} = M) ->
 %% network_evaluator's own resolution.
 resolved_output_activation(undefined, Activation) -> Activation;
 resolved_output_activation(OutputActivation, _Activation) -> OutputActivation.
+
+%% @private Refuse a network whose behaviour this exporter cannot reproduce.
+%%
+%% ⚠ A CfC network is NOT a feedforward network. Each CfC neuron carries
+%% internal state across evaluations, so the thing that actually runs is
+%% evaluate_with_state/2 and the same input produces a different output on every
+%% tick. This exporter reads only the weight matrices and the activations, so
+%% what it emits is the STATELESS evaluate/2 function: one constant output for a
+%% repeated input, and a different value from any of the ticks it is meant to
+%% reproduce. Measured on a 3-4-2 CfC net, same input three times: the exported
+%% function gives -0.139 while the flown network gives -0.055, -0.091, -0.111.
+%%
+%% Exporting that quietly would hand somebody a champion that is a different
+%% controller. Until a stateful export exists, carrying the internal state as an
+%% extra input and output tensor, this is a refusal rather than a surprise.
+refuse_stateful(Network) when is_tuple(Network), element(1, Network) =:= network ->
+    stateful_or_ok(network_evaluator:get_neuron_meta(Network));
+refuse_stateful(#{} = M) ->
+    stateful_or_ok(maps:get(neuron_meta, M, undefined)).
+
+stateful_or_ok(undefined) ->
+    ok;
+stateful_or_ok(Meta) ->
+    Types = [maps:get(neuron_type, N, standard) || Layer <- Meta, N <- Layer],
+    case lists:usort(Types) -- [standard] of
+        [] -> ok;
+        [Stateful | _] -> throw({onnx, {unsupported_neuron_type, Stateful}})
+    end.
 
 %% @private Calculate layer sizes from weight matrices
 get_layer_sizes([]) -> [];

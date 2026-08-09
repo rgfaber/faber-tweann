@@ -12,7 +12,7 @@
 %%   LastReward  -1.0 / +1.0 (0.0 on the first trial)
 %%   LastAction  +1.0 if the last choice was arm 0, -1.0 if arm 1 (0.0 first trial)
 %%   1.0         constant bias.
-%% Actuator (vl 1): Output >= 0 chooses arm 0, < 0 chooses arm 1.
+%% Actuator (vl 1): Output of zero or more chooses arm 0, below zero chooses arm 1.
 %% Reward / modulator: +1.0 / -1.0 as above (also the neuromodulator for plasticity).
 %%
 %% Reward is drawn deterministically from a hash of (FlipSeed, Trial, Arm), so the
@@ -26,7 +26,7 @@
 %% reversal, approaches the optimal mean reward 2*PHi - 1 per trial.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(prob_reversal_bandit_sim).
 
 -behaviour(scape).

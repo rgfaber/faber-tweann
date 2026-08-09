@@ -63,8 +63,8 @@ drive it:
 
 | Module | Role | State |
 |---|---|---|
-| `tuning_selection` | chooses which neurons to perturb | **built** — `src/tuning_selection.erl` (dynamic / dynamic_random / active / current / all), invoked from `exoself:perturb_weights/1` |
-| `tuning_duration` | computes `max_attempts` per agent per generation | **built** — `src/tuning_duration.erl` (const / wsize_proportional), invoked from `exoself:compute_max_attempts/1` |
+| `tuning_selection` | chooses which neurons to perturb | **built** — `src/tuning_selection.erl` (dynamic / dynamic_random / active / current / all), invoked from exoself's perturb_weights/1 |
+| `tuning_duration` | computes `max_attempts` per agent per generation | **built** — `src/tuning_duration.erl` (const / wsize_proportional), invoked from exoself's compute_max_attempts/1 |
 | `tot_topological_mutations` | how many topological mutations to apply | still a fixed count |
 
 Both modules are faithful ports of DXNN2 and are now wired into `exoself`. The

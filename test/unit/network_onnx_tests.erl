@@ -266,3 +266,21 @@ to_onnx_refuses_an_unmappable_output_activation_test() ->
     Network = network_evaluator:create_feedforward(2, [3], 1, tanh, sin),
     ?assertEqual({error, {unsupported_activation, sin}},
                  network_onnx:to_onnx(Network)).
+
+%% A CfC network carries per-neuron internal state, so the function that runs is
+%% evaluate_with_state/2, not evaluate/2. This exporter reads only weights and
+%% activations, so it can only emit the stateless one. Exporting quietly would
+%% hand somebody a champion that is a different controller, which is the failure
+%% mode hecate-dronex's charter item 12 would otherwise walk into.
+to_onnx_refuses_a_cfc_network_test() ->
+    Network = network_evaluator:create_cfc_feedforward(3, [4], 2, tanh, undefined),
+    ?assertEqual({error, {unsupported_neuron_type, cfc}},
+                 network_onnx:to_onnx(Network)).
+
+%% All-standard metadata is not statefulness, so it must still export.
+to_onnx_allows_explicitly_standard_metadata_test() ->
+    Base = network_evaluator:create_feedforward(2, [3], 1, tanh, tanh),
+    Meta = [[#{neuron_type => standard, tau => 1.0, state_bound => 1.0}
+             || _ <- lists:seq(1, N)] || N <- [3, 1]],
+    Network = network_evaluator:set_neuron_meta(Base, Meta),
+    ?assertMatch({ok, _}, network_onnx:to_onnx(Network)).

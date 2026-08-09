@@ -10,6 +10,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.1.0]
+
+An evolved genotype can now leave the machine it was bred on, and three
+functions that used to return a confidently wrong answer now return the right
+one or an error. ROADMAP items 8a and 8b move to the README; 8c stays open.
+
+### Added
+
+- **`genotype:to_binary/1`, `from_binary/1` and `genome_id/1`** (ROADMAP 8b),
+  over a new `genotype_codec`. Until this existed a genotype lived in ETS and
+  nowhere else: it could not be persisted, could not be put on a wire and could
+  not be handed to another node. That was the whole of what stopped topology
+  evolution being usable by a service.
+
+  Canonical and lossless. The encoding is hand-rolled over the closed set of
+  term shapes a genotype contains, and refuses everything else rather than
+  guessing. It is deliberately **not** `term_to_binary/2`: that function's
+  `deterministic` option is not promised to be stable across OTP releases, so it
+  is unfit for a content address, and a sibling project lost days to exactly
+  that when two identical images computed different fingerprints and each
+  filtered the other out as incompatible.
+
+  Atoms decode through `binary_to_existing_atom/2`, so an untrusted genome
+  cannot mint atoms and one from an incompatible build is refused by name.
+  Explicit size limits are a denial-of-service defence and they reject rather
+  than clamp, because clamping changes the genome and then its published
+  identifier no longer identifies what ran.
+
+- **`genotype_to_network`**, the conversion behind `from_genotype/1`, exporting
+  `supported_activations/0` so a caller can ask before converting.
+
+- **`scripts/check_onnx_export.escript` and `scripts/check_onnx_export.py`**, a
+  guard that exports networks, runs them in onnxruntime and compares against
+  `network_evaluator:evaluate/2`. This is how the ONNX defects below were found.
+
+### Fixed
+
+- **`network_evaluator:from_genotype/1` discarded the weights and reported
+  success** (ROADMAP 8a). It counted the neurons, invented a layer shape and
+  filled it with random numbers, while its own documentation claimed to read the
+  structure *and weights* from Mnesia. There is no Mnesia and there were no
+  weights. An evolved champion came back correctly shaped and knowing nothing,
+  and nothing raised.
+
+  It now converts faithfully or returns `{error, {not_layerable, Why}}` naming
+  what stopped it. Five things can: recurrence, a connection that skips or
+  crosses a layer, mixed activation functions, an activation the evaluator does
+  not implement, and an `ltc` neuron. Missing connections are filled with `0.0`,
+  which is exact rather than approximate.
+
+  ⚠ The fourth is easy to underestimate. The evaluator implements `tanh`,
+  `sigmoid`, `relu` and `linear`, and its activation dispatch ends in a
+  catch-all returning `math:tanh/1`. A genotype carrying `gaussian`, `sin`,
+  `cos` or any of the other functions the genotype layer supports would have
+  converted into a network computing a different function, silently.
+
+- **`network_onnx:to_onnx/1` ignored the output activation.** The hidden
+  activation was applied to every layer including the last, so a network with
+  `relu` hidden and `linear` output exported with `relu` on its output:
+  onnxruntime returned `0.0` where the evaluator returned `-0.676`. Invisible
+  whenever the two activations are equal, which is what every existing test
+  used.
+
+- **`network_onnx` silently substituted Tanh** for any activation it could not
+  map, exporting a model that computed something else. Now refused with
+  `{error, {unsupported_activation, Af}}`.
+
+- **`network_onnx` silently dropped CfC state.** A CfC network's behaviour comes
+  from `evaluate_with_state/2`, where each neuron carries internal state across
+  ticks; the exporter reads only weight matrices and activations, so it emitted
+  the stateless `evaluate/2` function instead. Measured on a 3-4-2 CfC network,
+  the same input three times: the exported function gives a constant `-0.139`
+  while the real network gives `-0.055`, `-0.091`, `-0.111`. Exporting that
+  quietly hands somebody a champion that is a different controller, so it is now
+  refused with `{error, {unsupported_neuron_type, cfc}}`. A stateful export,
+  carrying the internal state as an extra input and output tensor, is future
+  work.
+
+- **README claimed topology evolution removes neurons and connections.** There
+  is no remove operator. Complexification only; parsimony pressure is available
+  through `fitness_postprocessor:size_proportional/2`.
+
+### Changed
+
+- Package links and `ex_doc` `source_url` now point at GitHub, which has been
+  canonical since 2026-07-26. The Codeberg repository is a soon-to-be-deleted
+  copy and is no longer linked.
+- `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` added.
+
+### Notes for upgraders
+
+`from_genotype/1` and `to_onnx/1` can now return `{error, _}` where they
+previously returned `{ok, _}`. In every such case the previous `{ok, _}` carried
+a result that was wrong, so this is a fix rather than a removal of capability,
+but code that pattern-matched `{ok, Net}` without a fallback clause will now
+crash where it used to proceed on bad data. That is the intended direction.
+
+Nothing else changes. `create_feedforward/3,4,5`, `create_cfc_feedforward/5`,
+`set_weights/2`, `get_weights/1`, `evaluate/2` and `evaluate_with_state/2` are
+untouched.
+
 ## [2.0.1]
 
 ### Fixed
@@ -80,7 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **ONNX export has been broken since v1.2.0.** `network_onnx:get_network_data/1`
+- **ONNX export has been broken since v1.2.0.** network_onnx's get_network_data/1
   matched `#network{}` as a fixed-arity tuple. The CfC/LTC work added
   `neuron_meta` and `internal_state`, so every export raised `function_clause`
   and returned `{error, {onnx_export_failed, ...}}`. `network_evaluator` now

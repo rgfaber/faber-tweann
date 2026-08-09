@@ -10,7 +10,7 @@
 %%   step 0        -> [cue, 0]   cue shown (+1 left / -1 right)
 %%   corridor      -> [0, 0]     nothing
 %%   junction      -> [0, 1]     decide now
-%% Actuator (vl 1): Output >= 0 turns left, < 0 turns right.
+%% Actuator (vl 1): Output of zero or more turns left, below zero turns right.
 %%
 %% Why it is the right instrument: with random cues, a MEMORYLESS network sees
 %% [0,1] at the junction with no cue information, so its best fixed policy is to
@@ -24,7 +24,7 @@
 %% trial count (defaults 2 and 20).
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(tmaze_sim).
 
 -behaviour(scape).

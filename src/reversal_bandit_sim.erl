@@ -10,7 +10,7 @@
 %%
 %% Sensor (vl 1): a constant [1.0] -- there is no cue to remember; the information
 %%   lives entirely in the reward stream.
-%% Actuator (vl 1): Output >= 0 chooses arm 0, < 0 chooses arm 1.
+%% Actuator (vl 1): Output of zero or more chooses arm 0, below zero chooses arm 1.
 %% Reward / modulator: +1.0 if the chosen arm is currently good, -1.0 otherwise. The
 %%   SAME value is the fitness contribution AND the neuromodulator a reward-gated
 %%   plasticity rule uses to adapt (see network_evaluator:evaluate_with_neuromod/4).
@@ -29,7 +29,7 @@
 %% competitor) is a separate scape.
 %%
 %% @copyright 2024-2026 R.G. Lefever
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(reversal_bandit_sim).
 
 -behaviour(scape).

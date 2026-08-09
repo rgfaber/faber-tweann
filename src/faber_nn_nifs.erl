@@ -15,7 +15,7 @@
 %% implementations silently disagreed for months while both test suites passed.
 %%
 %% @copyright 2025 rgfaber
-%% @license Apache-2.0
+%% Licence: Apache-2.0
 -module(faber_nn_nifs).
 
 -export([
