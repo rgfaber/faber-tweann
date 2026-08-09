@@ -101,13 +101,13 @@ one or an error. ROADMAP items 8a and 8b move to the README; 8c stays open.
   dispatcher was missed. A caller following the spec got a `badarg` on the
   boolean, which is why the disagreement was never exercised.
 
-- **`actuator:actuate/4` carried an unreachable branch for an attached scape**,
+- **actuator's actuate/4 carried an unreachable branch for an attached scape**,
   under a comment saying it was retained for callers that predate the fitness
   channel. There are no such callers: the single call site reaches it only on
   its own `undefined` branch. It matches `undefined` in the head now, so a scape
   arriving there fails loudly rather than taking a path that cannot run.
 
-- **`exoself:compute_max_attempts/1` had a clause that could never match**, since
+- **exoself's compute_max_attempts/1 had a clause that could never match**, since
   `tuning_duration_function` is `undefined` or a two-tuple and the first two
   clauses cover both. Removed rather than kept as insurance against a state that
   cannot occur.
