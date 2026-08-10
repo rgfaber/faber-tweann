@@ -25,6 +25,7 @@
     %% Network compilation and evaluation
     compile_network/3,
     evaluate/2,
+    evaluate_with_state/3,
     evaluate_batch/2,
     compatibility_distance/5,
     benchmark_evaluate/3,
@@ -188,6 +189,12 @@ compile_network(_Nodes, _InputCount, _OutputIndices) ->
 
 -spec evaluate(reference(), [float()]) -> [float()].
 evaluate(_Network, _Inputs) ->
+    erlang:nif_error(nif_not_loaded).
+
+%% @doc Evaluate, threading the memory organelles' state. Returns
+%% {Outputs, NextState}. An empty state is read as zeros.
+-spec evaluate_with_state(term(), [float()], [float()]) -> {[float()], [float()]}.
+evaluate_with_state(_Network, _Inputs, _State) ->
     erlang:nif_error(nif_not_loaded).
 
 -spec evaluate_batch(reference(), [[float()]]) -> [[float()]].

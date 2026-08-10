@@ -219,7 +219,11 @@
     ro_ids = [],                %% recurrent_output_ids
 
     %% LTC Extension Fields (Liquid Time-Constant Dynamics)
-    neuron_type = standard,     %% standard | ltc | cfc
+    neuron_type = standard,     %% standard | ltc | cfc | delay
+                                %% delay is a MEMORY ORGANELLE: it emits what
+                                %% it captured last tick and applies no
+                                %% activation, so a feedback path through one
+                                %% is not a cycle. genotype_to_dag only.
     time_constant = 1.0,        %% tau (base time constant, evolvable)
     state_bound = 1.0,          %% A (bounds for stable dynamics)
     ltc_backbone_weights = [],  %% weights for f() backbone network

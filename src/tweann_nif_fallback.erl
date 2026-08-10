@@ -12,6 +12,7 @@
     %% Network evaluation
     compile_network/3,
     evaluate/2,
+    evaluate_with_state/3,
     evaluate_batch/2,
     compatibility_distance/5,
     benchmark_evaluate/3,
@@ -68,42 +69,83 @@
 %% @doc Compile network to internal format (Erlang record).
 -spec compile_network(list(), non_neg_integer(), [non_neg_integer()]) -> map().
 compile_network(Nodes, InputCount, OutputIndices) ->
-    %% Store as map for Erlang-based evaluation
+    %% Store as map for Erlang-based evaluation.
+    %%
+    %% delay_indices mirrors the native side: the node indices of the memory
+    %% organelles, ascending, which is the layout of the state vector. Computed
+    %% once here rather than rediscovered on every evaluation.
     #{
         nodes => maps:from_list([{Idx, Node} || {Idx, _, _, _, _} = Node <- Nodes]),
         input_count => InputCount,
         output_indices => OutputIndices,
-        node_list => Nodes
+        node_list => Nodes,
+        delay_indices => [Idx || {Idx, delay, _, _, _} <- Nodes]
     }.
 
-%% @doc Evaluate network with inputs.
+%% @doc Evaluate network with inputs, starting from zeroed memory.
 -spec evaluate(map(), [float()]) -> [float()].
-evaluate(#{nodes := _Nodes, input_count := InputCount, output_indices := OutputIndices, node_list := NodeList}, Inputs) ->
-    case length(Inputs) of
-        InputCount ->
-            forward_propagate(InputCount, OutputIndices, NodeList, Inputs);
-        _ ->
-            []  %% Wrong input count
-    end;
-evaluate(_, _) ->
-    [].
+evaluate(Network, Inputs) ->
+    {Outputs, _Next} = evaluate_with_state(Network, Inputs, []),
+    Outputs.
 
-%% @private Forward propagate inputs through the network node list.
-forward_propagate(InputCount, OutputIndices, NodeList, Inputs) ->
-    %% Initialize activations with inputs
-    InitActivations = maps:from_list(lists:zip(lists:seq(0, InputCount - 1), Inputs)),
-    %% Forward propagate through nodes in order
-    FinalActivations = lists:foldl(
-        fun(Node, Acc) -> evaluate_node(Node, Acc) end,
-        InitActivations,
-        NodeList
-    ),
-    %% Extract outputs
-    [maps:get(Idx, FinalActivations, 0.0) || Idx <- OutputIndices].
+%% @doc Evaluate, threading the memory organelles' state.
+%%
+%% ⚠ THIS MUST MATCH native evaluate_with_state EXACTLY, pass for pass. Three
+%% passes, and the order is the whole mechanism:
+%%
+%%   1. EMIT. Every delay publishes the value it captured last tick. This is why
+%%      a delay's output does not depend on this tick's inputs, and why a
+%%      feedback path through one is not a cycle.
+%%   2. FORWARD. Ordinary nodes evaluate in list order, which the caller has
+%%      guaranteed is topological.
+%%   3. CAPTURE. Every delay stores the weighted sum of its inputs, which may
+%%      name nodes that come after it.
+%%
+%% An empty state reads as zeros. A state of the wrong length returns two empty
+%% lists rather than being padded.
+-spec evaluate_with_state(map(), [float()], [float()]) -> {[float()], [float()]}.
+evaluate_with_state(#{input_count := InputCount, output_indices := OutputIndices,
+                      node_list := NodeList, delay_indices := DelayIdx},
+                    Inputs, State) ->
+    case {length(Inputs), State =:= [] orelse length(State) =:= length(DelayIdx)} of
+        {InputCount, true} ->
+            stateful(InputCount, OutputIndices, NodeList, DelayIdx, Inputs, State);
+        _ ->
+            {[], []}
+    end;
+evaluate_with_state(_, _, _) ->
+    {[], []}.
+
+stateful(InputCount, OutputIndices, NodeList, DelayIdx, Inputs, State) ->
+    Init = maps:from_list(lists:zip(lists:seq(0, InputCount - 1), Inputs)),
+    Held = case State of
+        [] -> [{I, 0.0} || I <- DelayIdx];
+        _ -> lists:zip(DelayIdx, State)
+    end,
+    %% Pass 1: emit
+    Emitted = lists:foldl(fun({I, V}, Acc) -> maps:put(I, V, Acc) end, Init, Held),
+    %% Pass 2: forward, delays skipped
+    Values = lists:foldl(fun evaluate_node/2, Emitted, NodeList),
+    %% Pass 3: capture
+    ByIdx = maps:from_list([{I, N} || {I, _, _, _, _} = N <- NodeList]),
+    Next = [captured(maps:get(I, ByIdx), Values) || I <- DelayIdx],
+    {[maps:get(Idx, Values, 0.0) || Idx <- OutputIndices], Next}.
+
+%% Pass 3. What a delay organelle stores for the next tick: the weighted sum of
+%% its inputs plus its bias, with no activation applied. Its sources may name
+%% nodes that come after it, which is exactly how a feedback path stays acyclic.
+captured({_Idx, _Type, _Act, Bias, Connections}, Values) ->
+    lists:foldl(
+        fun({FromIdx, Weight}, S) -> S + maps:get(FromIdx, Values, 0.0) * Weight end,
+        Bias,
+        Connections
+    ).
 
 %% @private Compute a single node's activation and store it in the accumulator.
 evaluate_node({_Idx, input, _Activation, _Bias, _Connections}, Acc) ->
     Acc;  %% Already initialized
+evaluate_node({_Idx, delay, _Activation, _Bias, _Connections}, Acc) ->
+    Acc;  %% Emitted in pass 1, captured in pass 3, and never activated
 evaluate_node({Idx, _Type, Activation, Bias, Connections}, Acc) ->
     %% Compute weighted sum
     Sum = lists:foldl(

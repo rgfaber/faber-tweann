@@ -37,6 +37,10 @@ mod atoms {
         input,
         hidden,
         output,
+        // A memory organelle: emits its stored value, then captures its input.
+        // Its output does not depend on this tick's inputs, which is what lets a
+        // feedback path through one stay acyclic.
+        delay,
         bias,
         // Distance types
         l1,
@@ -186,6 +190,9 @@ struct Node {
     activation: Activation,
     bias: f64,
     connections: Vec<Connection>,
+    /// A delay organelle. Emits last tick's captured value rather than a
+    /// function of this tick's inputs, and applies no activation.
+    is_delay: bool,
 }
 
 /// Compiled network for fast evaluation
@@ -199,38 +206,79 @@ pub struct CompiledNetwork {
     output_indices: Vec<usize>,
     /// Total number of nodes
     node_count: usize,
+    /// Node indices of the delay organelles, ascending. The state vector has
+    /// one slot per entry, in this order.
+    delay_indices: Vec<usize>,
 }
 
 impl CompiledNetwork {
-    /// Evaluate the network with given inputs
+    /// Evaluate the network with given inputs, starting from zeroed memory.
     pub fn evaluate(&self, inputs: &[f64]) -> Vec<f64> {
+        let (outputs, _next) = self.evaluate_with_state(inputs, &[]);
+        outputs
+    }
+
+    /// Evaluate, threading the memory organelles' state.
+    ///
+    /// Three passes, and the order is the whole mechanism:
+    ///
+    /// 1. EMIT. Every delay publishes the value it captured last tick. This is
+    ///    why a delay's output does not depend on this tick's inputs, and why a
+    ///    feedback path through one is not a cycle.
+    /// 2. FORWARD. Ordinary nodes evaluate in list order, which the caller has
+    ///    guaranteed is topological.
+    /// 3. CAPTURE. Every delay stores the weighted sum of its inputs, which may
+    ///    name nodes that come after it.
+    ///
+    /// An empty state is read as zeros, so a caller starting an episode need not
+    /// know how many organelles the network has.
+    pub fn evaluate_with_state(&self, inputs: &[f64], state: &[f64]) -> (Vec<f64>, Vec<f64>) {
         if inputs.len() != self.input_count {
-            return vec![];
+            return (vec![], vec![]);
+        }
+        if !state.is_empty() && state.len() != self.delay_indices.len() {
+            return (vec![], vec![]);
         }
 
-        // Allocate values array
         let mut values = vec![0.0f64; self.node_count];
 
-        // Set input values (first input_count nodes are inputs)
         for (i, &input) in inputs.iter().enumerate() {
             values[i] = input;
         }
 
-        // Process nodes in topological order (skip input nodes)
+        // Pass 1: emit
+        for (slot, &idx) in self.delay_indices.iter().enumerate() {
+            values[idx] = if state.is_empty() { 0.0 } else { state[slot] };
+        }
+
+        // Pass 2: forward
         for (idx, node) in self.nodes.iter().enumerate().skip(self.input_count) {
-            // Sum weighted inputs
+            if node.is_delay {
+                continue;
+            }
             let sum: f64 = node
                 .connections
                 .iter()
                 .map(|conn| values[conn.from_idx] * conn.weight)
                 .sum();
-
-            // Apply bias and activation
             values[idx] = node.activation.apply(sum + node.bias);
         }
 
-        // Collect outputs
-        self.output_indices.iter().map(|&i| values[i]).collect()
+        // Pass 3: capture
+        let next: Vec<f64> = self
+            .delay_indices
+            .iter()
+            .map(|&idx| {
+                let node = &self.nodes[idx];
+                node.connections
+                    .iter()
+                    .map(|conn| values[conn.from_idx] * conn.weight)
+                    .sum::<f64>()
+                    + node.bias
+            })
+            .collect();
+
+        (self.output_indices.iter().map(|&i| values[i]).collect(), next)
     }
 
     /// Evaluate multiple input sets (batch mode)
@@ -263,8 +311,14 @@ fn compile_network(
 ) -> NifResult<ResourceArc<NetworkResource>> {
     let mut nodes = Vec::with_capacity(nodes_term.len());
 
-    for (_idx, _node_type, activation_atom, bias, connections_term) in nodes_term {
+    let mut delay_indices = Vec::new();
+
+    for (_idx, node_type, activation_atom, bias, connections_term) in nodes_term {
         let activation = Activation::from_atom(activation_atom);
+        let is_delay = node_type == atoms::delay();
+        if is_delay {
+            delay_indices.push(nodes.len());
+        }
         let connections: Vec<Connection> = connections_term
             .into_iter()
             .map(|(from_idx, weight)| Connection { from_idx, weight })
@@ -274,6 +328,7 @@ fn compile_network(
             activation,
             bias,
             connections,
+            is_delay,
         });
     }
 
@@ -282,6 +337,7 @@ fn compile_network(
         nodes,
         input_count,
         output_indices,
+        delay_indices,
     };
 
     Ok(ResourceArc::new(NetworkResource(network)))
@@ -291,6 +347,22 @@ fn compile_network(
 #[rustler::nif]
 fn evaluate(network: ResourceArc<NetworkResource>, inputs: Vec<f64>) -> Vec<f64> {
     network.0.evaluate(&inputs)
+}
+
+/// Evaluate a compiled network, threading the memory organelles' state.
+///
+/// Returns {Outputs, NextState}. An empty state is read as zeros, so a caller
+/// starting an episode does not need to know the organelle count. A state of
+/// the wrong length returns two empty lists rather than being padded, because
+/// silently accepting a mismatched state is how a network gets flown with
+/// somebody else's memory.
+#[rustler::nif]
+fn evaluate_with_state(
+    network: ResourceArc<NetworkResource>,
+    inputs: Vec<f64>,
+    state: Vec<f64>,
+) -> (Vec<f64>, Vec<f64>) {
+    network.0.evaluate_with_state(&inputs, &state)
 }
 
 /// Evaluate a compiled network with multiple input sets (batch mode)

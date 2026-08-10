@@ -50,6 +50,7 @@
 -export([
     compile_network/3,
     evaluate/2,
+    evaluate_with_state/3,
     evaluate_batch/2,
     compatibility_distance/5,
     benchmark_evaluate/3,
@@ -230,6 +231,21 @@ evaluate(Network, Inputs) ->
     case impl_module() of
         faber_nn_nifs -> faber_nn_nifs:evaluate(Network, Inputs);
         _ -> tweann_nif_fallback:evaluate(Network, Inputs)
+    end.
+
+%% @doc Evaluate a compiled network, threading its memory organelles' state.
+%%
+%% Returns {Outputs, NextState}. Pass [] for the state to start an episode from
+%% zeros without knowing how many organelles the network has; NextState's length
+%% is the count. A state of the wrong length returns two empty lists rather than
+%% being padded, because accepting a mismatched state silently is how a network
+%% gets flown with somebody else's memory.
+-spec evaluate_with_state(Network :: reference() | map(), Inputs :: [float()],
+                          State :: [float()]) -> {[float()], [float()]}.
+evaluate_with_state(Network, Inputs, State) ->
+    case impl_module() of
+        faber_nn_nifs -> faber_nn_nifs:evaluate_with_state(Network, Inputs, State);
+        _ -> tweann_nif_fallback:evaluate_with_state(Network, Inputs, State)
     end.
 
 %% @doc Evaluate a network with multiple input sets.

@@ -18,9 +18,22 @@
 %%% The process-per-neuron phenotype is the alternative and it is orders of
 %%% magnitude slower.
 %%%
-%%% ⚠ Does NOT buy temporal memory. compile_network/3 carries no per-node state,
-%%% so a CfC or LTC neuron cannot be represented and is refused. A caller that
-%%% needs memory AND arbitrary topology has neither path today.
+%%% Memory comes from a DELAY ORGANELLE rather than from per-neuron state. A
+%%% neuron whose neuron_type is delay emits what it captured last tick and
+%%% applies no activation, so its output does not depend on this tick's inputs.
+%%% Two consequences, and the second is the point:
+%%%
+%%% The state vector holds one float per organelle rather than one per neuron,
+%%% so it stays small and its layout is explicit.
+%%%
+%%% ⚠ And A FEEDBACK PATH THROUGH A DELAY IS NOT A CYCLE. A delay contributes no
+%%% ordering constraint, so a genotype where neuron A feeds a delay that feeds
+%%% back into A converts, sorts and evaluates. A cycle that does NOT pass
+%%% through a delay is still refused, because that one really has no order.
+%%%
+%%% ⚠⚠ CfC and LTC neurons are still refused. Their dynamics are a per-neuron
+%%% continuous-time update, which is a different thing from a unit delay, and
+%%% converting one into the other would be an approximation reported as success.
 %%%
 %%% ==========================================================================
 %%% THE CONTRACT, WHICH IS TIGHTER THAN THE SPEC SUGGESTS
@@ -45,7 +58,9 @@
 %%%
 %%% 1. index equals list position, over one contiguous run from zero
 %%% 2. the first InputCount nodes are the inputs
-%%% 3. topological order, every source strictly earlier than its consumer
+%%% 3. topological order, every source strictly earlier than its consumer,
+%%%    EXCEPT for a delay's own sources, which are read a tick later and may
+%%%    therefore name anything
 %%% 4. every source index in range
 %%%
 %%% A genotype that cannot satisfy 3 is cyclic, which is recurrence, and is
@@ -69,7 +84,7 @@
 -type dag() :: {[node_tuple()], non_neg_integer(), [non_neg_integer()]}.
 
 -type why() ::
-    cyclic
+    {cyclic, [term()]}
     | {unsupported_neuron_type, atom()}
     | {unknown_source, term(), term()}
     | {weight_count_mismatch, term(), non_neg_integer(), non_neg_integer()}
@@ -140,10 +155,15 @@ index_of(InputSlots, Ordered, InputCount) ->
         lists:zip(Ordered, lists:seq(InputCount, InputCount + length(Ordered) - 1))
     ).
 
-neuron_node(#neuron{input_idps = Idps, af = Af} = N, Index) ->
+neuron_node(#neuron{input_idps = Idps, af = Af, neuron_type = Type} = N, Index) ->
     Self = maps:get(N#neuron.id, Index),
     Conns = lists:append([connections(Idp, N, Index) || Idp <- Idps]),
-    {Self, neuron, Af, bias_of(Idps), Conns}.
+    {Self, wire_type(Type), Af, bias_of(Idps), Conns}.
+
+%% The evaluators special-case exactly two type atoms, input and delay, and
+%% treat everything else as an ordinary node.
+wire_type(delay) -> delay;
+wire_type(_) -> neuron.
 
 connections({bias, _}, _N, _Index) ->
     [];
@@ -195,6 +215,12 @@ topological(Neurons) ->
     Deps = maps:from_list([{N#neuron.id, neuron_deps(N, ById)} || N <- Neurons]),
     kahn(Deps, ById, [N#neuron.id || N <- Neurons], []).
 
+%% ⚠ A DELAY HAS NO DEPENDENCIES. Its output is last tick's capture, so it is
+%% ready before anything it reads has run. That is the whole reason a feedback
+%% path through one is orderable, and it is why the cycle refusal below only
+%% fires on a loop with no delay in it.
+neuron_deps(#neuron{neuron_type = delay}, _ById) ->
+    [];
 neuron_deps(#neuron{input_idps = Idps}, ById) ->
     [Id || {Id, _} <- Idps, Id =/= bias, maps:is_key(Id, ById)].
 
@@ -203,7 +229,7 @@ kahn(_Deps, _ById, [], Acc) ->
 kahn(Deps, ById, Pending, Acc) ->
     Placed = fun(Id) -> not lists:member(Id, Pending) end,
     Ready = [Id || Id <- Pending, lists:all(Placed, maps:get(Id, Deps))],
-    Ready =/= [] orelse refuse(cyclic),
+    Ready =/= [] orelse refuse({cyclic, Pending}),
     kahn(Deps, ById,
          [Id || Id <- Pending, not lists:member(Id, Ready)],
          [maps:get(Id, ById) || Id <- Ready] ++ Acc).
@@ -215,7 +241,7 @@ kahn(Deps, ById, Pending, Acc) ->
 %% compile_network/3 has no per-node state, so a neuron whose behaviour depends
 %% on carrying state between evaluations cannot be represented here.
 every_type_supported(Neurons) ->
-    case lists:usort([N#neuron.neuron_type || N <- Neurons]) -- [standard] of
+    case lists:usort([N#neuron.neuron_type || N <- Neurons]) -- [standard, delay] of
         [] -> ok;
         [Bad | _] -> refuse({unsupported_neuron_type, Bad})
     end.
@@ -230,8 +256,15 @@ well_formed(Nodes, InputCount) ->
     lists:all(fun({I, Type, _, _, _}) -> (Type =:= input) =:= (I < InputCount) end, Nodes)
         orelse erlang:error(dag_inputs_not_first),
     lists:all(
-        fun({I, _, _, _, Conns}) ->
-            lists:all(fun({From, _}) -> From >= 0 andalso From < I end, Conns)
+        fun({I, Type, _, _, Conns}) ->
+            Bound = case Type of
+                %% A delay reads its sources a tick late, in pass 3, after every
+                %% ordinary node has run. So they may name anything in range,
+                %% including itself.
+                delay -> Count;
+                _ -> I
+            end,
+            lists:all(fun({From, _}) -> From >= 0 andalso From < Bound end, Conns)
         end,
         Nodes
     ) orelse erlang:error(dag_not_topological),
