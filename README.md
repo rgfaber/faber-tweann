@@ -79,6 +79,15 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
   persisted, sent to another node, and content-addressed. Hand-rolled rather
   than `term_to_binary/2`, whose `deterministic` option is not stable across OTP
   releases and is therefore unfit for an address
+- **Reproducible runs**: `genotype_rand:seed/1` makes construction and mutation
+  a function of the seed, and the genotype layer draws from its own generator so
+  it never advances the caller's. `state/0` and `set_state/1` let a caller carry
+  the generator across a call
+- **Two ways to evaluate an evolved genotype**:
+  `network_evaluator:from_genotype/1` for a topology that fits a stack of dense
+  layers, and `genotype_to_dag:compile/1` for any acyclic topology at all,
+  through the Rust DAG evaluator. Both convert faithfully or refuse with a
+  reason; neither approximates
 
 ### LTC/CfC Neurons
 - **Temporal Memory**: Neurons maintain persistent internal state

@@ -10,6 +10,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.2.0]
+
+An evolved topology can now be flown, and a run can be a function of its seed.
+Together with 2.1.0's serialisation, that is everything between
+`genome_mutator` and a service that can actually use it.
+
+### Added
+
+- **`genotype_to_dag`**, converting a genotype into the flat node list
+  `tweann_nif:compile_network/3` takes. That evaluator imposes no layer
+  structure, so any acyclic connection pattern converts, including the skip and
+  cross-layer connections `network_evaluator:from_genotype/1` refuses. It is
+  also the only route by which a mutated topology can be evaluated at
+  simulation rates: the alternative is the process-per-neuron phenotype, which
+  is orders of magnitude slower.
+
+  `nodes/1` is pure and returns the node list, the input count and the output
+  indices, so it can be inspected without loading a NIF. `compile/1` hands
+  straight to the evaluator.
+
+  ⚠ **The contract is tighter than the spec suggests, and neither
+  implementation checks any of it.** The native `compile_network` discards the
+  index it is given and uses list position, while the Erlang fallback keys on
+  the index; they agree only when the two coincide. On a source index that does
+  not exist the native side indexes a vector and would panic where the fallback
+  reads a map with a default of zero. And neither sorts, so a connection whose
+  source appears later silently reads zero on both. This module emits and then
+  asserts all four properties rather than trusting them.
+
+  Refuses a cycle rather than evaluating it into a number, and refuses a CfC or
+  LTC neuron, because `compile_network/3` carries no per-node state and
+  converting one would drop the dynamics silently.
+
+- **`genotype_rand`**, the genotype layer's own generator.
+  `seed/1` makes construction and mutation reproducible; `state/0` and
+  `set_state/1` let a caller carry the generator across a call and recover
+  pure-value semantics without any signature changing.
+
+### Fixed
+
+- **Building a genotype advanced the caller's random generator.** Every draw in
+  construction and mutation was a bare `rand:uniform/0`, which reads and writes
+  the one state Erlang keeps per process, and that is the state the caller is
+  also using. So `genome_mutator:mutate/1` moved the caller's generator by an
+  unpredictable number of steps, and a caller who had seeded deliberately no
+  longer got the sequence they seeded for. A downstream project records this as
+  the reason a benchmark became irreproducible.
+
+  Twelve draws across `genotype`, `mutation_helpers`, `ltc_mutations`,
+  `perturbation_utils` and `selection_utils` now go through a separate state
+  under its own key. That is everything `construct_Agent/3` and
+  `genome_mutator:mutate/1,2` reach. What is **not** routed is listed in the
+  `genotype_rand` module documentation rather than left to be discovered:
+  `crossover`, `genome_crossover`, `selection_algorithm`, `tuning_selection`,
+  `species_identifier`, `network_evaluator`'s weight initialisation, the ES
+  optimisers and the scapes.
+
+- **The two DAG evaluators disagreed on ten of the seventeen activations.**
+  `tweann_nif_fallback`'s `apply_activation/2` implemented eight, spelled one of
+  them differently from the genotype layer (`abs` against `absolute`), and ended
+  in a catch-all returning the input unchanged, while the native side ends in
+  one returning tanh. So `gaussian` computed a gaussian on the native path and a
+  straight line on the fallback, and the two defaults did not agree with each
+  other either. Both halves now resolve through `functions`, which implements
+  all seventeen, and there is no catch-all: an activation neither side knows is
+  refused rather than guessed at.
+
+### Notes for upgraders
+
+`tweann_nif:evaluate/2` on the **fallback** path now computes `gaussian`,
+`sigmoid1`, `bin`, `trinary`, `multiquadric`, `quadratic`, `cubic`, `absolute`,
+`sqrt` and `log` correctly, where it previously returned the input unchanged for
+all of them. If you measured anything on the fallback path using one of those
+activations, the numbers change, and the new ones are the right ones. The native
+path is unaffected.
+
+An unknown activation now raises on the fallback path instead of silently
+behaving as `linear`.
+
+Nothing else changes. Everything added in 2.1.0 and earlier is untouched.
+
+### Still not available
+
+**Arbitrary topology and temporal memory cannot be had together on any path.**
+`network_evaluator` carries CfC state and its topology is a stack of dense
+layers; the DAG evaluator takes any topology and carries no state. Recorded as
+ROADMAP item 9.
+
 ## [2.1.0]
 
 An evolved genotype can now leave the machine it was bred on, and three

@@ -1,6 +1,6 @@
 {application, faber_tweann,
  [{description, "Faber TWEANN - Topology and Weight Evolving Artificial Neural Networks"},
-  {vsn, "2.1.0"},
+  {vsn, "2.2.0"},
   {registered, [faber_tweann_sup, morphology_registry]},
   {mod, {faber_tweann_app, []}},
   {applications,
@@ -45,5 +45,15 @@
            "rebar.config",
            "README.md",
            "ROADMAP.md",
+           "CONTRIBUTING.md",
+           "CODE_OF_CONDUCT.md",
+           %% Named one by one, not as the scripts directory: that also holds
+           %% publish-to-hex.sh and a node-specific experiment runner, none of
+           %% which belong in a consumer's checkout. These two do, because the
+           %% changelog tells a reader to use them to verify an ONNX export
+           %% against onnxruntime, and referencing a file the package does not
+           %% contain is the sort of small dishonesty that erodes the rest.
+           "scripts/check_onnx_export.escript",
+           "scripts/check_onnx_export.py",
            "LICENSE"]}
  ]}.

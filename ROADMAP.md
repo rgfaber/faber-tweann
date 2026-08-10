@@ -302,16 +302,49 @@ it can.
 
 **What remains for 8c proper.** `to_onnx/1` is still
 `-spec to_onnx(network_evaluator:network())`, so it takes only the dense-layer
-representation. An evolved topology that is recurrent, or that skips or crosses
-layers, is refused by 8a's converter and therefore cannot reach the exporter at
-all. Exporting those needs a topological sort, per-neuron Gather and Concat to
-assemble arbitrary predecessor sets, and Loop or Scan for recurrence.
+representation. Exporting an arbitrary topology needs a topological sort,
+per-neuron Gather and Concat to assemble arbitrary predecessor sets, and Loop or
+Scan for recurrence.
+
+⚠ **One of those is no longer owed.** `genotype_to_dag` topologically sorts a
+genotype and emits it as a flat indexed node list, so 8c can start from that
+rather than from an ETS graph. The sort, the index assignment and the cycle
+refusal are done; what is left is the protobuf emission for arbitrary
+predecessor sets.
 
 Note the evaluation half already exists: `tweann_nif:compile_network/3` and
 `tweann_nif:evaluate/2` handle arbitrary DAG and recurrent topologies exactly.
 What is missing is serialisation on either side of a runtime that is there. And
 the work now has a harness that can tell whether it is right, which is the part
 it did not have before.
+
+## 9. Per-node state in the DAG evaluator
+
+**Status:** not implemented, and it is now the thing that stops an evolved
+topology from having memory.
+
+`tweann_nif:compile_network/3` evaluates any acyclic topology and carries no
+state between calls, so a CfC or LTC neuron cannot be represented in it.
+`genotype_to_dag` refuses one rather than converting it and dropping the
+dynamics silently.
+
+`network_evaluator` is the mirror image: it carries CfC state through
+`evaluate_with_state/2`, and its topology is a stack of dense layers.
+
+**So arbitrary topology and temporal memory are not available together on any
+path.** A consumer must pick one, and the pair a downstream simulation actually
+wants (an evolved topology whose neurons remember) is the pair that does not
+exist.
+
+Intended: a `values` array that survives across evaluations, per-node state for
+the CfC update, and a compiled network that returns its next state rather than
+only its outputs. Both halves, since the native path and the Erlang fallback
+have to agree; the activation divergence closed in 2.2.0 is what that costs when
+they do not.
+
+Prerequisite for two things: flying an evolved topology in anything that needs
+memory, and a stateful ONNX export (which is separately owed for the layered
+path, where `to_onnx/1` already refuses a CfC network for the same reason).
 
 ## Not planned
 
