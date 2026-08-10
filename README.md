@@ -88,6 +88,10 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
   layers, and `genotype_to_dag:compile/1` for any acyclic topology at all,
   through the Rust DAG evaluator. Both convert faithfully or refuse with a
   reason; neither approximates
+- **Memory as an organelle**: a neuron typed `delay` emits what it captured last
+  tick, so it adds no ordering constraint and **a feedback path through one is
+  not a cycle**. Evaluate with `tweann_nif:evaluate_with_state/3`, which carries
+  one float per organelle rather than one per neuron
 
 ### LTC/CfC Neurons
 - **Temporal Memory**: Neurons maintain persistent internal state

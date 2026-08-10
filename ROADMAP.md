@@ -318,33 +318,39 @@ What is missing is serialisation on either side of a runtime that is there. And
 the work now has a harness that can tell whether it is right, which is the part
 it did not have before.
 
-## 9. Per-node state in the DAG evaluator
+## 9. Memory in the DAG evaluator — the DELAY ORGANELLE is DONE, the leaky integrator is not
 
-**Status:** not implemented, and it is now the thing that stops an evolved
-topology from having memory.
+**Status:** a unit delay landed in 2.2.0 and moved to the README. What remains is
+a richer organelle, and CfC itself.
 
-`tweann_nif:compile_network/3` evaluates any acyclic topology and carries no
-state between calls, so a CfC or LTC neuron cannot be represented in it.
-`genotype_to_dag` refuses one rather than converting it and dropping the
-dynamics silently.
+**Done.** `tweann_nif:evaluate_with_state/3` threads a state vector, and a
+neuron typed `delay` is a memory organelle: it emits what it captured last tick
+and applies no activation, so it adds no ordering constraint and a feedback path
+through one is not a cycle. Arbitrary topology and temporal memory ARE now
+available together, which they were not.
 
-`network_evaluator` is the mirror image: it carries CfC state through
-`evaluate_with_state/2`, and its topology is a stack of dense layers.
+The shape was chosen on evidence rather than convenience. Insight 018 ranked the
+three places memory can live as none, then wiring, then neuron, with CfC last.
+Insight 023 found that a solver which actually solved a memory task was a pure
+linear chain. A delay organelle is that chain, offered by the substrate.
 
-**So arbitrary topology and temporal memory are not available together on any
-path.** A consumer must pick one, and the pair a downstream simulation actually
-wants (an evolved topology whose neurons remember) is the pair that does not
-exist.
+**Not done, and the reason each is separate:**
 
-Intended: a `values` array that survives across evaluations, per-node state for
-the CfC update, and a compiled network that returns its next state rather than
-only its outputs. Both halves, since the native path and the Erlang fallback
-have to agree; the activation divergence closed in 2.2.0 is what that costs when
-they do not.
-
-Prerequisite for two things: flying an evolved topology in anything that needs
-memory, and a stateful ONNX export (which is separately owed for the layered
-path, where `to_onnx/1` already refuses a CfC network for the same reason).
+- **A leaky integrator with an evolvable time constant.** Strictly more
+  expressive than a unit delay and closer to what CfC does, at the cost of one
+  evolvable parameter per organelle and a numeric contract the two
+  implementations must match exactly. The state plumbing it needs now exists and
+  is held in agreement by a differential test, which is why delay went first.
+- **A mutation operator that adds an organelle.** Today a delay can be authored
+  but evolution has no operator that introduces one, so `genome_mutator` cannot
+  discover memory structurally. That is the step which would make this a TWEANN
+  capability rather than a hand-authoring one.
+- **CfC and LTC on the DAG path.** Still refused. A per-neuron continuous-time
+  update is a different thing from a unit delay and mapping one onto the other
+  would be an approximation reported as success.
+- **A stateful ONNX export**, separately owed for the layered path too, where
+  `to_onnx/1` already refuses a CfC network. An organelle is the easier case: a
+  state tensor in and out, no Loop or Scan required.
 
 ## Not planned
 

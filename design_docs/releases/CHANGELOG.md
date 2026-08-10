@@ -91,12 +91,46 @@ behaving as `linear`.
 
 Nothing else changes. Everything added in 2.1.0 and earlier is untouched.
 
+### The memory organelle
+
+- **`tweann_nif:evaluate_with_state/3`, and a `delay` neuron type.** A neuron
+  whose `neuron_type` is `delay` emits what it captured last tick and applies no
+  activation. Returns `{Outputs, NextState}`; pass `[]` to start an episode from
+  zeros without knowing the organelle count.
+
+  ⚠ **A feedback path through a delay is not a cycle.** A delay's output does
+  not depend on this tick's inputs, so it contributes no ordering constraint. A
+  genotype where a neuron feeds a delay that feeds back into that neuron
+  converts, sorts and runs as a DAG plus state. A loop with **no** delay in it
+  is still refused, because that one genuinely has no order.
+
+  The state vector holds one float per organelle rather than one per neuron, so
+  it stays small and its layout is explicit. A state of the wrong length returns
+  two empty lists rather than being padded.
+
+  **Why this shape rather than per-neuron state.** Insight 018 compared the
+  three places memory can live on this engine and ranked them `none > wiring >
+  neuron`, with CfC last; its title records that CfC's smoothing actively hurts
+  fast control. Insight 023 then dumped the wiring of a solver that actually
+  solved a memory task and found a pure linear chain, every neuron with exactly
+  one input. Evolution built a delay line out of ordinary neurons because the
+  substrate offered nothing else.
+
+  Three passes, and the order is the mechanism: emit every delay's stored value,
+  run the ordinary nodes in topological order, then capture each delay's
+  weighted input sum, which may name nodes that come after it. Implemented in
+  both Rust and Erlang, and held in agreement by a differential test with two
+  halves: an exact one on linear activations, where any difference is a logic
+  difference, and a tolerant one on tanh, where Rust and libm legitimately
+  differ by a unit in the last place.
+
 ### Still not available
 
-**Arbitrary topology and temporal memory cannot be had together on any path.**
-`network_evaluator` carries CfC state and its topology is a stack of dense
-layers; the DAG evaluator takes any topology and carries no state. Recorded as
-ROADMAP item 9.
+**CfC and LTC remain refused on the DAG path.** Their dynamics are a per-neuron
+continuous-time update, which is a different thing from a unit delay, and
+mapping one onto the other would be an approximation reported as success. A
+leaky integrator with an evolvable time constant, which subsumes both smoothing
+and delay, is the next increment. ROADMAP item 9.
 
 ## [2.1.0]
 
