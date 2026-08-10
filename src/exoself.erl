@@ -294,7 +294,8 @@ spawn_neurons(State, Agent) ->
 %% path (population_monitor -> exoself) evaluates LTC genotypes as LTC, not as
 %% standard neurons that silently ignore their temporal parameters.
 -spec spawn_neuron_by_type(#neuron{}, term()) -> {ok, pid()}.
-spawn_neuron_by_type(#neuron{neuron_type = delay, id = Id}, _NeuronId) ->
+spawn_neuron_by_type(#neuron{neuron_type = Organelle, id = Id}, _NeuronId)
+  when Organelle =:= delay; Organelle =:= leaky ->
     %% ⚠ There is no delay process. A delay organelle emits what it captured
     %% last tick, which the DAG evaluator implements in three passes and this
     %% message-driven phenotype has no equivalent for. Falling through to the
@@ -305,7 +306,7 @@ spawn_neuron_by_type(#neuron{neuron_type = delay, id = Id}, _NeuronId) ->
     %% The process path expresses the same idea as a recurrent connection, which
     %% it already supports and which seeds its target with 0.0 on the first
     %% cycle. Use that here, or evaluate through the DAG path.
-    erlang:error({delay_organelle_has_no_process_phenotype, Id});
+    erlang:error({organelle_has_no_process_phenotype, Organelle, Id});
 spawn_neuron_by_type(#neuron{neuron_type = Type} = Neuron, NeuronId)
   when Type =:= ltc; Type =:= cfc ->
     neuron_ltc:start_link(#{

@@ -22,7 +22,8 @@ genotype_to_dag_test_() ->
         fun orders_nodes_so_every_source_comes_first/0,
         fun compiles_and_evaluates_through_the_evaluator/0,
         fun refuses_a_cycle/0,
-        fun refuses_a_cfc_neuron/0,
+        fun refuses_an_ltc_neuron/0,
+        fun a_cfc_neuron_matches_the_standalone_cfc/0,
         fun refuses_an_unknown_source/0,
         fun a_delay_emits_last_ticks_value/0,
         fun delays_chain_into_a_longer_delay/0,
@@ -31,7 +32,11 @@ genotype_to_dag_test_() ->
         fun the_state_is_one_slot_per_organelle/0,
         fun refuses_a_state_of_the_wrong_length/0,
         fun both_implementations_agree_exactly_on_linear_feedback/0,
-        fun both_implementations_agree_within_an_ulp_on_tanh_feedback/0
+        fun both_implementations_agree_within_an_ulp_on_tanh_feedback/0,
+        fun a_leaky_integrator_approaches_its_input/0,
+        fun a_leaky_integrator_does_not_break_a_cycle/0,
+        fun refuses_a_non_positive_time_constant/0,
+        fun both_implementations_agree_on_a_mixed_state_vector/0
     ]}.
 
 %%==============================================================================
@@ -131,14 +136,45 @@ refuses_a_cycle() ->
     genotype:write(N#neuron{input_idps = [{O, [w(1.0)]} | N#neuron.input_idps]}),
     ?assertMatch({error, {not_convertible, {cyclic, _}}}, genotype_to_dag:nodes(Ag)).
 
-%% compile_network/3 carries no per-node state, so a CfC neuron's memory cannot
-%% be represented and converting it would silently drop the dynamics.
-refuses_a_cfc_neuron() ->
+%% LTC proper is an Euler step needing a dt that no genotype field carries, so
+%% converting one would mean inventing a value.
+refuses_an_ltc_neuron() ->
     {Ag, _S, H1, _H2, _O} = layered(),
     N = genotype:dirty_read({neuron, H1}),
-    genotype:write(N#neuron{neuron_type = cfc}),
-    ?assertEqual({error, {not_convertible, {unsupported_neuron_type, cfc}}},
+    genotype:write(N#neuron{neuron_type = ltc, time_constant = 1.0}),
+    ?assertEqual({error, {not_convertible, {unsupported_neuron_type, ltc}}},
                  genotype_to_dag:nodes(Ag)).
+
+%% A CfC neuron on this path must compute exactly what the standalone
+%% evaluate_cfc/4 computes, or "CfC" would mean two things again depending on
+%% how it was reached. That is the failure this whole line of work removed.
+a_cfc_neuron_matches_the_standalone_cfc() ->
+    S = {{-1.0, u()}, sensor},
+    C = {{0.0, u()}, neuron},
+    A = {{1.0, u()}, actuator},
+    Cx = {{origin, u()}, cortex},
+    Ag = {{origin, u()}, agent},
+    genotype:write(#sensor{id = S, cx_id = Cx, name = in, vl = 1, fanout_ids = [C]}),
+    genotype:write(#neuron{id = C, cx_id = Cx, af = linear, aggr_f = dot_product,
+                           neuron_type = cfc, time_constant = 1.3, state_bound = 1.0,
+                           input_idps = [{S, [w(1.0)]}], output_ids = [A]}),
+    genotype:write(#actuator{id = A, cx_id = Cx, name = out, vl = 1, fanin_ids = [C]}),
+    genotype:write(#cortex{id = Cx, agent_id = Ag, neuron_ids = [C],
+                           sensor_ids = [S], actuator_ids = [A]}),
+    genotype:write(#agent{id = Ag, cx_id = Cx, generation = 0}),
+    {ok, Net} = genotype_to_dag:compile(Ag),
+    Inputs = [0.7, -0.4, 1.1],
+    {ByGraph, _} = lists:foldl(
+        fun(X, {Acc, St}) ->
+            {[Out], St2} = tweann_nif:evaluate_with_state(Net, [X], St),
+            {[Out | Acc], St2}
+        end, {[], []}, Inputs),
+    {ByHand, _} = lists:foldl(
+        fun(X, {Acc, St}) ->
+            {NewSt, Out} = tweann_nif:evaluate_cfc(X, St, 1.3, 1.0),
+            {[Out | Acc], NewSt}
+        end, {[], 0.0}, Inputs),
+    ?assertEqual(lists:reverse(ByHand), lists:reverse(ByGraph)).
 
 refuses_an_unknown_source() ->
     {Ag, _S, H1, _H2, _O} = layered(),
@@ -331,3 +367,77 @@ trace(Compile, Eval, Nodes) ->
         {[], []},
         [1.0, -0.5, 0.25, 2.0, -1.0]),
     lists:reverse(Trace).
+
+%%==============================================================================
+%% The leaky integrator, the second organelle
+%%
+%% Where a delay holds a value for exactly one tick, a leaky integrator moves
+%% its state toward its input by one part in tau each tick. It READS this tick's
+%% inputs, so unlike a delay it is ordered normally and does not break a cycle.
+%%==============================================================================
+
+%% tau = 2 halves the remaining distance each tick, from a standing start:
+%% 0 -> 0.5 -> 0.75 -> 0.875 for a constant input of 1.0.
+a_leaky_integrator_approaches_its_input() ->
+    S = {{-1.0, u()}, sensor},
+    L = {{0.0, u()}, neuron},
+    A = {{1.0, u()}, actuator},
+    Cx = {{origin, u()}, cortex},
+    Ag = {{origin, u()}, agent},
+    genotype:write(#sensor{id = S, cx_id = Cx, name = in, vl = 1, fanout_ids = [L]}),
+    genotype:write(#neuron{id = L, cx_id = Cx, af = linear, aggr_f = dot_product,
+                           neuron_type = leaky, time_constant = 2.0,
+                           input_idps = [{S, [w(1.0)]}], output_ids = [A]}),
+    genotype:write(#actuator{id = A, cx_id = Cx, name = out, vl = 1, fanin_ids = [L]}),
+    genotype:write(#cortex{id = Cx, agent_id = Ag, neuron_ids = [L],
+                           sensor_ids = [S], actuator_ids = [A]}),
+    genotype:write(#agent{id = Ag, cx_id = Cx, generation = 0}),
+    {ok, Net} = genotype_to_dag:compile(Ag),
+    {O1, St1} = tweann_nif:evaluate_with_state(Net, [1.0], []),
+    {O2, St2} = tweann_nif:evaluate_with_state(Net, [1.0], St1),
+    {O3, _} = tweann_nif:evaluate_with_state(Net, [1.0], St2),
+    ?assertEqual([[0.5], [0.75], [0.875]], [O1, O2, O3]).
+
+%% The distinction that matters between the two organelles. A delay adds no
+%% ordering constraint, so a loop through one converts. A leaky integrator reads
+%% this tick's inputs, so a loop through one is a genuine cycle and is refused.
+a_leaky_integrator_does_not_break_a_cycle() ->
+    {Ag, _S, H1, _H2, O} = layered(),
+    N = genotype:dirty_read({neuron, H1}),
+    genotype:write(N#neuron{input_idps = [{O, [w(1.0)]} | N#neuron.input_idps]}),
+    Out = genotype:dirty_read({neuron, O}),
+    genotype:write(Out#neuron{neuron_type = leaky, time_constant = 2.0}),
+    ?assertMatch({error, {not_convertible, {cyclic, _}}}, genotype_to_dag:nodes(Ag)).
+
+%% The update divides by tau, so zero or less cannot be evaluated. Refused with
+%% a reason here rather than surfacing as a bad argument out of a NIF.
+refuses_a_non_positive_time_constant() ->
+    {Ag, _S, H1, _H2, _O} = layered(),
+    N = genotype:dirty_read({neuron, H1}),
+    genotype:write(N#neuron{neuron_type = leaky, time_constant = 0.0}),
+    ?assertMatch({error, {not_convertible, {non_positive_time_constant, _}}},
+                 genotype_to_dag:nodes(Ag)).
+
+%% Both organelles at once, sharing one state vector, and both implementations
+%% agreeing on it tick by tick. Linear throughout so the arithmetic is exact and
+%% any difference is a logic difference.
+both_implementations_agree_on_a_mixed_state_vector() ->
+    Nodes = [{0, input, linear, 0.0, []},
+             {1, delay, linear, 0.0, [{3, 1.0}]},
+             {2, {leaky, 2.0}, linear, 0.0, [{0, 1.0}]},
+             {3, neuron, linear, 0.0, [{0, 0.5}, {1, 0.25}, {2, 0.5}]}],
+    Run = fun(Compile, Eval) ->
+        C = Compile(Nodes, 1, [3]),
+        {T, _} = lists:foldl(
+            fun(X, {Acc, St}) ->
+                {Out, St2} = Eval(C, [X], St),
+                {[{Out, St2} | Acc], St2}
+            end, {[], []}, [1.0, 1.0, 2.0, -1.0, 0.5]),
+        lists:reverse(T)
+    end,
+    Native = Run(fun faber_nn_nifs:compile_network/3, fun faber_nn_nifs:evaluate_with_state/3),
+    Erlang = Run(fun tweann_nif_fallback:compile_network/3, fun tweann_nif_fallback:evaluate_with_state/3),
+    %% Two slots, one per organelle, in node-index order.
+    [{_, FirstState} | _] = Native,
+    ?assertEqual(2, length(FirstState)),
+    ?assertEqual(Native, Erlang).

@@ -318,47 +318,96 @@ What is missing is serialisation on either side of a runtime that is there. And
 the work now has a harness that can tell whether it is right, which is the part
 it did not have before.
 
-## 9. Memory in the DAG evaluator — the DELAY ORGANELLE is DONE, the leaky integrator is not
+## 9. Memory in the DAG evaluator — DONE
 
-**Status:** a unit delay landed in 2.2.0 and moved to the README. What remains is
-a richer organelle, and CfC itself.
+**Status:** delay, leaky and CfC all run on the DAG path, and the CfC divergence
+that blocked the last of them is closed. Moved to the README.
 
-**Done.** `tweann_nif:evaluate_with_state/3` threads a state vector, and a
-neuron typed `delay` is a memory organelle: it emits what it captured last tick
-and applies no activation, so it adds no ordering constraint and a feedback path
-through one is not a cycle. Arbitrary topology and temporal memory ARE now
-available together, which they were not.
+Three node kinds carry state, and the difference between them is which tick they
+read:
 
-The shape was chosen on evidence rather than convenience. Insight 018 ranked the
-three places memory can live as none, then wiring, then neuron, with CfC last.
-Insight 023 found that a solver which actually solved a memory task was a pure
-linear chain. A delay organelle is that chain, offered by the substrate.
+- **`delay`** emits what it captured last tick and applies no activation, so its
+  output does not depend on this tick's inputs. It contributes no ordering
+  constraint, which is why **a feedback path through a delay is not a cycle**.
+- **`leaky`** moves its state toward its input by one part in `time_constant`
+  each tick and the state is the output. It reads this tick's inputs, so it is
+  ordered normally and does **not** break a cycle.
+- **`cfc`** is the closed-form continuous-time neuron, the same dynamics
+  `tweann_nif:evaluate_cfc/4` computes, reached through the same code so the two
+  cannot drift.
 
-**`add_delay` landed too**, so evolution can introduce an organelle rather than
-only run one somebody authored. It splices a delay into an existing connection,
-the way `add_neuron` splices a neuron, with the original weight moved to the
-link out and unity on the way in so the mutation costs a tick and does not also
-change the path gain.
+`add_delay/1` and `add_leaky/1` splice an organelle into an existing connection,
+so evolution introduces them rather than a person authoring them, and
+`mutate_time_constant` reaches a leaky organelle's tau through the new
+`select_tau_neuron/1`, so placement is chosen by the operator and the constant
+is tuned by machinery that already existed. Neither operator is in the default
+list: the process phenotype has no organelle process and raises rather than
+running one as an ordinary neuron.
 
-⚠ It is deliberately **not** in the default operator list. A delay is evaluated
-by `genotype_to_dag` and by nothing else, and both phenotype builders now RAISE
-on one rather than spawning a standard neuron that would ignore the type, so a
-`population_monitor` run would crash the moment it fired. Opt in per constraint,
-for a population evaluated through the DAG path.
+### ⚠ The CfC divergence, found while doing this and now closed
 
-**Not done, and the reason each is separate:**
+There were **three** implementations of the CfC update disagreeing by up to
+**0.36** on the same inputs. `ltc_dynamics` (reached by `neuron_ltc`, so by the
+process phenotype), the native NIF, and `tweann_nif_fallback`, which **discarded
+tau entirely** and returned `tanh(state)` rather than the state.
 
-- **A leaky integrator with an evolvable time constant.** Strictly more
-  expressive than a unit delay and closer to what CfC does, at the cost of one
-  evolvable parameter per organelle and a numeric contract the two
-  implementations must match exactly. The state plumbing it needs now exists and
-  is held in agreement by a differential test, which is why delay went first.
-- **CfC and LTC on the DAG path.** Still refused. A per-neuron continuous-time
-  update is a different thing from a unit delay and mapping one onto the other
-  would be an approximation reported as success.
-- **A stateful ONNX export**, separately owed for the layered path too, where
-  `to_onnx/1` already refuses a CfC network. An organelle is the easier case: a
-  state tensor in and out, no Loop or Scan required.
+`network_evaluator:evaluate_with_state/2` routes CfC through
+`tweann_nif:evaluate_cfc/4`, so **a CfC network computed a different function
+depending on whether the native library had loaded**, and nothing said so.
+
+The native implementation is now the reference and the fallback matches it to
+one unit in the last place across a 240-case sweep, held there by
+`cfc_reference_tests`. Closing it also turned up that the fallback's sigmoid
+**raised** on a backbone of 2000, which a tau of 0.001 reaches from an ordinary
+input, where the native one returns a value.
+
+### Owed, and each is a decision rather than an oversight
+
+- **`ltc_dynamics` still differs**, so the process phenotype computes a
+  different CfC from every other path. Its backbone is `sigmoid(input/tau)`, a
+  second squash, which confines the retention gate to about `(0.269, 0.5)`: the
+  state can never hold more than half its value per step whatever tau is. An
+  adversarial review of the research corpus called that "not a CfC family
+  member, it is a defect". It is **not** changed here, because insights 017 and
+  018 were measured on it and changing it makes them unreproducible on current
+  code. Changing it is a decision about the record, not a bug fix.
+- **The native sigmoid clamps its argument to ±10**, which floors the gate at
+  `4.54e-5` instead of zero. The stable form needs no clamp, so this distorts
+  rather than protects; it is mirrored in the fallback rather than removed,
+  because insights 024 to 048 were measured with it in place.
+- **The corpus does not record which implementation produced its CfC numbers.**
+  The review established that 017 and 018 used `ltc_dynamics` and that the whole
+  024-048 family plus 057-062 used the bridge, but only by inference from the
+  data, since no raw feed carries an implementation or an engine pin. That is a
+  finding about the record rather than about this package, and the fix belongs
+  upstream in `faber-ecosystem`: a corrigendum per CfC-bearing insight and an
+  implementation field in future raw feeds.
+
+## 10. ONNX export beyond a stack of dense layers
+
+**Status:** not implemented. Split out of item 8c and item 9 because it is now
+its own thing and both of the paths that feed it exist.
+
+`network_onnx:to_onnx/1` is `-spec to_onnx(network_evaluator:network())`, so it
+takes only the dense-layer representation. Two separate gaps sit behind that:
+
+**10a. Arbitrary topology.** An evolved topology that skips or crosses layers is
+refused by `genotype_to_network` and cannot reach the exporter. Exporting one
+needs a topological sort, which `genotype_to_dag` already does, plus per-neuron
+Gather and Concat to assemble arbitrary predecessor sets.
+
+**10b. Stateful export.** `to_onnx/1` refuses a CfC network outright, because it
+reads only weights and activations and would emit the stateless function: on a
+3-4-2 CfC net the same input three times gives a constant `-0.139` where the real
+network gives `-0.055`, `-0.091`, `-0.111`. The organelles make this the easier
+case rather than the harder one: state in and state out as extra tensors, no
+Loop or Scan required, and the state vector is one float per organelle with an
+explicit layout.
+
+`scripts/check_onnx_export.py` is the harness either would be verified against,
+and it already runs an exported model in onnxruntime and compares it with the
+evaluator. Whatever is built here gets checked by running it, which is how the
+two defects fixed in 2.1.0 were found.
 
 ## Not planned
 

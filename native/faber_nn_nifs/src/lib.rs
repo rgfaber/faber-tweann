@@ -41,6 +41,11 @@ mod atoms {
         // Its output does not depend on this tick's inputs, which is what lets a
         // feedback path through one stay acyclic.
         delay,
+        // A leaky integrator: state moves toward its input by 1/tau each tick
+        // and the state IS the output. Unlike a delay it reads this tick's
+        // inputs, so it is ordered like an ordinary node and does not break a
+        // cycle.
+        leaky,
         bias,
         // Distance types
         l1,
@@ -190,9 +195,32 @@ struct Node {
     activation: Activation,
     bias: f64,
     connections: Vec<Connection>,
-    /// A delay organelle. Emits last tick's captured value rather than a
-    /// function of this tick's inputs, and applies no activation.
-    is_delay: bool,
+    /// What kind of node this is, which decides whether it carries state and
+    /// when it is evaluated.
+    kind: Kind,
+}
+
+/// A node's kind. Ordinary nodes and inputs carry no state; the organelles do.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Kind {
+    Input,
+    Ordinary,
+    /// Emits last tick's capture. No dependency on this tick's inputs, so a
+    /// feedback path through one is not a cycle.
+    Delay,
+    /// state += (x - state) / tau, and the state is the output. Reads this
+    /// tick's inputs, so it is ordered like an ordinary node.
+    Leaky { tau: f64 },
+    /// The closed-form continuous-time neuron, same dynamics as
+    /// evaluate_cfc_impl in simple mode. Reads this tick's inputs, so it is
+    /// ordered like an ordinary node.
+    Cfc { tau: f64, bound: f64 },
+}
+
+impl Kind {
+    fn is_stateful(self) -> bool {
+        matches!(self, Kind::Delay | Kind::Leaky { .. } | Kind::Cfc { .. })
+    }
 }
 
 /// Compiled network for fast evaluation
@@ -206,9 +234,9 @@ pub struct CompiledNetwork {
     output_indices: Vec<usize>,
     /// Total number of nodes
     node_count: usize,
-    /// Node indices of the delay organelles, ascending. The state vector has
-    /// one slot per entry, in this order.
-    delay_indices: Vec<usize>,
+    /// Node indices of the STATEFUL nodes, ascending. The state vector has one
+    /// slot per entry, in this order, whatever kind each one is.
+    stateful_indices: Vec<usize>,
 }
 
 impl CompiledNetwork {
@@ -236,47 +264,85 @@ impl CompiledNetwork {
         if inputs.len() != self.input_count {
             return (vec![], vec![]);
         }
-        if !state.is_empty() && state.len() != self.delay_indices.len() {
+        if !state.is_empty() && state.len() != self.stateful_indices.len() {
             return (vec![], vec![]);
         }
 
         let mut values = vec![0.0f64; self.node_count];
+        let mut next = vec![0.0f64; self.stateful_indices.len()];
 
         for (i, &input) in inputs.iter().enumerate() {
             values[i] = input;
         }
 
-        // Pass 1: emit
-        for (slot, &idx) in self.delay_indices.iter().enumerate() {
-            values[idx] = if state.is_empty() { 0.0 } else { state[slot] };
+        // Slot lookup: node index -> state slot.
+        let mut slot_of = vec![usize::MAX; self.node_count];
+        for (slot, &idx) in self.stateful_indices.iter().enumerate() {
+            slot_of[idx] = slot;
+        }
+        let held = |slot: usize| if state.is_empty() { 0.0 } else { state[slot] };
+
+        // Pass 1: emit. Only a delay publishes before the forward pass, because
+        // only a delay's output is independent of this tick's inputs.
+        for (slot, &idx) in self.stateful_indices.iter().enumerate() {
+            if self.nodes[idx].kind == Kind::Delay {
+                values[idx] = held(slot);
+                next[slot] = held(slot);
+            }
         }
 
-        // Pass 2: forward
-        for (idx, node) in self.nodes.iter().enumerate().skip(self.input_count) {
-            if node.is_delay {
+        // Pass 2: forward, in list order, which the caller guarantees is
+        // topological. A leaky integrator updates here because it reads this
+        // tick's inputs; a delay is skipped, having already emitted.
+        for idx in self.input_count..self.node_count {
+            let node = &self.nodes[idx];
+            if node.kind == Kind::Delay {
                 continue;
             }
             let sum: f64 = node
                 .connections
                 .iter()
                 .map(|conn| values[conn.from_idx] * conn.weight)
-                .sum();
-            values[idx] = node.activation.apply(sum + node.bias);
+                .sum::<f64>()
+                + node.bias;
+            match node.kind {
+                Kind::Leaky { tau } => {
+                    let slot = slot_of[idx];
+                    let prev = held(slot);
+                    let updated = prev + (sum - prev) / tau;
+                    values[idx] = updated;
+                    next[slot] = updated;
+                }
+                Kind::Cfc { tau, bound } => {
+                    // The same evaluate_cfc_impl the standalone NIF exposes, so
+                    // a CfC neuron computes one thing whichever way it is
+                    // reached. No activation is applied on top; the state is
+                    // the output, as it is there.
+                    let slot = slot_of[idx];
+                    let (new_state, out) =
+                        evaluate_cfc_impl(sum, held(slot), tau, bound, &[], &[]);
+                    values[idx] = out;
+                    next[slot] = new_state;
+                }
+                _ => {
+                    values[idx] = node.activation.apply(sum);
+                }
+            }
         }
 
-        // Pass 3: capture
-        let next: Vec<f64> = self
-            .delay_indices
-            .iter()
-            .map(|&idx| {
-                let node = &self.nodes[idx];
-                node.connections
+        // Pass 3: capture. A delay stores the weighted sum of its inputs, which
+        // may name nodes that come after it.
+        for (slot, &idx) in self.stateful_indices.iter().enumerate() {
+            let node = &self.nodes[idx];
+            if node.kind == Kind::Delay {
+                next[slot] = node
+                    .connections
                     .iter()
                     .map(|conn| values[conn.from_idx] * conn.weight)
                     .sum::<f64>()
-                    + node.bias
-            })
-            .collect();
+                    + node.bias;
+            }
+        }
 
         (self.output_indices.iter().map(|&i| values[i]).collect(), next)
     }
@@ -304,20 +370,21 @@ fn load(env: Env, _: Term) -> bool {
 /// - input_count: integer
 /// - output_indices: [integer]
 #[rustler::nif]
-fn compile_network(
-    nodes_term: Vec<(usize, Atom, Atom, f64, Vec<(usize, f64)>)>,
+fn compile_network<'a>(
+    env: rustler::Env<'a>,
+    nodes_term: Vec<(usize, rustler::Term<'a>, Atom, f64, Vec<(usize, f64)>)>,
     input_count: usize,
     output_indices: Vec<usize>,
 ) -> NifResult<ResourceArc<NetworkResource>> {
+    let _ = env;
     let mut nodes = Vec::with_capacity(nodes_term.len());
+    let mut stateful_indices = Vec::new();
 
-    let mut delay_indices = Vec::new();
-
-    for (_idx, node_type, activation_atom, bias, connections_term) in nodes_term {
+    for (_idx, type_term, activation_atom, bias, connections_term) in nodes_term {
         let activation = Activation::from_atom(activation_atom);
-        let is_delay = node_type == atoms::delay();
-        if is_delay {
-            delay_indices.push(nodes.len());
+        let kind = decode_kind(type_term)?;
+        if kind.is_stateful() {
+            stateful_indices.push(nodes.len());
         }
         let connections: Vec<Connection> = connections_term
             .into_iter()
@@ -328,7 +395,7 @@ fn compile_network(
             activation,
             bias,
             connections,
-            is_delay,
+            kind,
         });
     }
 
@@ -337,10 +404,59 @@ fn compile_network(
         nodes,
         input_count,
         output_indices,
-        delay_indices,
+        stateful_indices,
     };
 
     Ok(ResourceArc::new(NetworkResource(network)))
+}
+
+/// A node's type slot is either a bare atom or a tagged tuple carrying the
+/// organelle's parameters. Keeping the parameters inside the type rather than
+/// adding a sixth tuple element is what lets this stay compatible with every
+/// caller that predates the organelles.
+///
+/// A leaky integrator's tau must be strictly positive: the update divides by it,
+/// and a zero or negative tau is a genotype this evaluator cannot run. Refused
+/// rather than clamped, so a caller learns rather than silently getting a
+/// different neuron.
+fn decode_kind(term: rustler::Term<'_>) -> NifResult<Kind> {
+    if term.is_atom() {
+        let atom: Atom = term.decode()?;
+        return if atom == atoms::input() {
+            Ok(Kind::Input)
+        } else if atom == atoms::delay() {
+            Ok(Kind::Delay)
+        } else {
+            Ok(Kind::Ordinary)
+        };
+    }
+    let tuple = rustler::types::tuple::get_tuple(term)?;
+    match tuple.len() {
+        2 => {
+            let tag: Atom = tuple[0].decode()?;
+            if tag != atoms::leaky() {
+                return Err(rustler::Error::BadArg);
+            }
+            let tau: f64 = tuple[1].decode()?;
+            if !(tau > 0.0) {
+                return Err(rustler::Error::BadArg);
+            }
+            Ok(Kind::Leaky { tau })
+        }
+        3 => {
+            let tag: Atom = tuple[0].decode()?;
+            if tag != atoms::cfc() {
+                return Err(rustler::Error::BadArg);
+            }
+            let tau: f64 = tuple[1].decode()?;
+            let bound: f64 = tuple[2].decode()?;
+            if !(tau > 0.0) || !(bound > 0.0) {
+                return Err(rustler::Error::BadArg);
+            }
+            Ok(Kind::Cfc { tau, bound })
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 /// Evaluate a compiled network with given inputs

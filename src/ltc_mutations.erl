@@ -91,7 +91,11 @@ ensure_positive(_Value, Default) -> Default.
 mutate_time_constant(AgentId) ->
     Agent = genotype:dirty_read({agent, AgentId}),
     PerturbRange = Agent#agent.perturbation_range,
-    case mutation_helpers:select_ltc_neuron(AgentId) of
+    %% select_tau_neuron/1, not select_ltc_neuron/1: a leaky organelle divides by
+    %% its time constant, so tau is evolvable there too. Placement comes from
+    %% add_leaky and the constant is tuned here, which is what makes the
+    %% organelle evolvable rather than fixed where it was spliced.
+    case mutation_helpers:select_tau_neuron(AgentId) of
         {error, Reason} ->
             {error, Reason};
         NeuronId ->

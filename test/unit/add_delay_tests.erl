@@ -33,7 +33,11 @@ add_delay_test_() ->
         fun it_is_reachable_through_genome_mutator/0,
         fun it_is_not_in_the_default_operator_list/0,
         fun the_process_phenotype_refuses_a_delay_rather_than_faking_it/0,
-        fun the_dag_path_runs_what_the_process_path_refuses/0
+        fun the_dag_path_runs_what_the_process_path_refuses/0,
+        fun splices_a_leaky_integrator_with_a_drawn_time_constant/0,
+        fun the_time_constant_is_reachable_by_mutate_time_constant/0,
+        fun it_is_also_absent_from_the_default_operator_list/0,
+        fun the_process_phenotype_refuses_a_leaky_too/0
     ]}.
 
 an_agent() ->
@@ -128,7 +132,7 @@ it_is_not_in_the_default_operator_list() ->
 the_process_phenotype_refuses_a_delay_rather_than_faking_it() ->
     AgentId = an_agent(),
     ok = topological_mutations:add_delay(AgentId),
-    ?assertError({delay_organelle_has_no_process_phenotype, _},
+    ?assertError({organelle_has_no_process_phenotype, _, _},
                  constructor:construct(AgentId)).
 
 %% And the same genotype the process path refuses is one the DAG path runs, so
@@ -136,9 +140,51 @@ the_process_phenotype_refuses_a_delay_rather_than_faking_it() ->
 the_dag_path_runs_what_the_process_path_refuses() ->
     AgentId = an_agent(),
     ok = topological_mutations:add_delay(AgentId),
-    ?assertError({delay_organelle_has_no_process_phenotype, _},
+    ?assertError({organelle_has_no_process_phenotype, _, _},
                  constructor:construct(AgentId)),
     {ok, Net} = genotype_to_dag:compile(AgentId),
     {Out, State} = tweann_nif:evaluate_with_state(Net, [1.0, 1.0], []),
     ?assertEqual(1, length(State)),
     ?assert(is_list(Out)).
+
+%%==============================================================================
+%% add_leaky, the second organelle's operator
+%%==============================================================================
+
+splices_a_leaky_integrator_with_a_drawn_time_constant() ->
+    AgentId = an_agent(),
+    ?assertEqual(ok, topological_mutations:add_leaky(AgentId)),
+    [L] = [N || N <- neurons_of(AgentId), N#neuron.neuron_type =:= leaky],
+    ?assertEqual(1, length(L#neuron.input_idps)),
+    %% Same range create_cfc_feedforward draws tau from.
+    ?assert(L#neuron.time_constant >= 0.1),
+    ?assert(L#neuron.time_constant =< 2.0),
+    [{_Src, [{W, _, _, _}]}] = L#neuron.input_idps,
+    ?assertEqual(1.0, W).
+
+%% Placement comes from this operator; the constant is then tuned by the
+%% machinery that already exists, which is what makes it evolvable rather than
+%% fixed at the moment it was spliced.
+the_time_constant_is_reachable_by_mutate_time_constant() ->
+    AgentId = an_agent(),
+    ok = topological_mutations:add_leaky(AgentId),
+    [Before] = [N || N <- neurons_of(AgentId), N#neuron.neuron_type =:= leaky],
+    Moved = lists:any(
+        fun(_) ->
+            _ = ltc_mutations:mutate_time_constant(AgentId),
+            [After] = [N || N <- neurons_of(AgentId), N#neuron.neuron_type =:= leaky],
+            After#neuron.time_constant =/= Before#neuron.time_constant
+        end,
+        lists:seq(1, 25)),
+    ?assert(Moved).
+
+it_is_also_absent_from_the_default_operator_list() ->
+    Default = #constraint{},
+    Operators = [Op || {Op, _W} <- Default#constraint.mutation_operators],
+    ?assertNot(lists:member(add_leaky, Operators)).
+
+the_process_phenotype_refuses_a_leaky_too() ->
+    AgentId = an_agent(),
+    ok = topological_mutations:add_leaky(AgentId),
+    ?assertError({organelle_has_no_process_phenotype, leaky, _},
+                 constructor:construct(AgentId)).

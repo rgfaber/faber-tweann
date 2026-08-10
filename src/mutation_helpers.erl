@@ -20,6 +20,7 @@
     %% Neuron selection
     select_random_neuron/1,
     select_ltc_neuron/1,
+    select_tau_neuron/1,
 
     %% Link operations
     link_neuron_to_target/3,
@@ -78,6 +79,30 @@ select_from_ltc_list(LtcNeurons) -> selection_utils:random_select(LtcNeurons).
 is_ltc_neuron(NeuronId) ->
     N = genotype:dirty_read({neuron, NeuronId}),
     N#neuron.neuron_type =:= ltc orelse N#neuron.neuron_type =:= cfc.
+
+%% @doc Select a random neuron that HAS a meaningful time constant.
+%%
+%% Wider than select_ltc_neuron/1 by exactly one type: a leaky organelle divides
+%% by its time_constant, so tau means something there and ought to be tunable by
+%% the same machinery that tunes it on an LTC neuron.
+%%
+%% ⚠ Deliberately a SEPARATE selector rather than widening select_ltc_neuron/1.
+%% That one also feeds mutate_neuron_type, mutate_state_bound and
+%% mutate_ltc_weights. Widening it would let mutate_neuron_type flip an
+%% organelle into a cfc neuron, which the DAG evaluator refuses, and would let
+%% the other two perturb fields a leaky integrator does not use.
+-spec select_tau_neuron(term()) -> term() | {error, term()}.
+select_tau_neuron(AgentId) ->
+    Agent = genotype:dirty_read({agent, AgentId}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    case [NId || NId <- Cortex#cortex.neuron_ids, has_tau(NId)] of
+        [] -> {error, no_tau_neurons};
+        Candidates -> selection_utils:random_select(Candidates)
+    end.
+
+has_tau(NeuronId) ->
+    N = genotype:dirty_read({neuron, NeuronId}),
+    lists:member(N#neuron.neuron_type, [ltc, cfc, leaky]).
 
 %%==============================================================================
 %% Link Operations

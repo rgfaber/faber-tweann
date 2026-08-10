@@ -219,11 +219,16 @@
     ro_ids = [],                %% recurrent_output_ids
 
     %% LTC Extension Fields (Liquid Time-Constant Dynamics)
-    neuron_type = standard,     %% standard | ltc | cfc | delay
+    neuron_type = standard,     %% standard | ltc | cfc | delay | leaky
                                 %% delay is a MEMORY ORGANELLE: it emits what
                                 %% it captured last tick and applies no
                                 %% activation, so a feedback path through one
                                 %% is not a cycle. genotype_to_dag only.
+                                %% leaky is the other organelle: state moves
+                                %% toward its input by 1/time_constant each
+                                %% tick and the state is the output. It READS
+                                %% this tick's inputs, so unlike delay it is
+                                %% ordered normally and does NOT break a cycle.
     time_constant = 1.0,        %% tau (base time constant, evolvable)
     state_bound = 1.0,          %% A (bounds for stable dynamics)
     ltc_backbone_weights = [],  %% weights for f() backbone network

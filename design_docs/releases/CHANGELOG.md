@@ -10,6 +10,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.4.0]
+
+ROADMAP item 9 closes. Memory on the DAG path now comes in three kinds, and
+getting the third one there meant closing a divergence that had three
+implementations of CfC disagreeing by up to 0.36.
+
+### Added
+
+- **`leaky` organelle and `topological_mutations:add_leaky/1`.** A leaky
+  integrator moves its state toward its input by one part in `time_constant`
+  each tick, and the state is the output. Unlike a delay it READS this tick's
+  inputs, so it is ordered normally and does **not** break a cycle. A chain of
+  delays gives discrete memory; a leaky integrator gives a decaying trace.
+
+- **`mutation_helpers:select_tau_neuron/1`**, and `mutate_time_constant` now
+  uses it, so a leaky organelle's time constant is tuned by the machinery that
+  already tunes an LTC neuron's. Placement comes from the operator, the constant
+  from mutation; that is what makes the organelle evolvable rather than fixed
+  where it was spliced.
+
+  ⚠ Deliberately a separate selector rather than widening `select_ltc_neuron/1`,
+  which also feeds `mutate_neuron_type`. Widening that one would let a mutation
+  flip an organelle into a CfC neuron.
+
+- **`cfc` on the DAG path.** A CfC neuron converts and evaluates through
+  `genotype_to_dag`, computing exactly what `tweann_nif:evaluate_cfc/4`
+  computes, reached through the same code so the two cannot drift.
+
+### Fixed
+
+- **⚠ THREE IMPLEMENTATIONS OF CfC DISAGREED BY UP TO 0.36.**
+  `ltc_dynamics:evaluate_cfc/4` (reached by `neuron_ltc`, so by the process
+  phenotype), the native NIF, and `tweann_nif_fallback:evaluate_cfc/4`. The last
+  **discarded tau entirely**, binding it as `_Tau`, so a liquid TIME-CONSTANT
+  neuron's time constant did nothing; it also used a different backbone and
+  returned `tanh(state)` rather than the state. `pop_cfc_neuron/6` had the same
+  defect, so a whole population evaluated there ignored every time constant.
+
+  This was not confined to a corner. `network_evaluator:evaluate_with_state/2`
+  routes CfC through `tweann_nif:evaluate_cfc/4`, so **a CfC network computed a
+  different function depending on whether the native library had loaded**, and
+  nothing said so.
+
+  The native implementation is now the reference. The fallback matches it to one
+  unit in the last place across a 240-case sweep, held there by
+  `cfc_reference_tests`.
+
+- **The fallback's sigmoid raised instead of saturating.** `1/(1+exp(-X))` errors
+  on this VM for large negative X, where Rust's returns infinity and carries on
+  to give 0.0. A CfC backbone is `input/tau`, so a tau of 0.001 reaches the
+  thousands from an ordinary input. Now computed in the stable branched form.
+
+### Changed
+
+- **`mutate_time_constant` returns `{error, no_tau_neurons}`** where it returned
+  `{error, no_ltc_neurons}`. Same behaviour when there is nothing to select; the
+  reason is accurate now that the selector spans every type carrying a tau.
+
+- **The phenotype guard raises `{organelle_has_no_process_phenotype, Type, Id}`**
+  where 2.3.0 raised `{delay_organelle_has_no_process_phenotype, Id}`. It covers
+  `leaky` as well as `delay` now, so it names which kind it refused.
+
+### ⚠ Owed, and each is a decision rather than an oversight
+
+- **`ltc_dynamics` still differs from the reference**, so the process phenotype
+  computes a different CfC from every other path. Its backbone is
+  `sigmoid(input/tau)`, a second squash, confining the retention gate to about
+  `(0.269, 0.5)`: the state can never hold more than half its value per step,
+  whatever tau is. It is **not** changed here, because insights 017 and 018 were
+  measured on it.
+
+- **The native sigmoid clamps its argument to ±10**, flooring the gate at
+  `4.54e-5` rather than zero. The stable form needs no clamp, so this distorts
+  rather than protects. Mirrored in the fallback rather than removed, because
+  insights 024 to 048 were measured with it in place.
+
+- ⚠⚠ **A correction to this changelog's own 2.2.0 entry.** That entry cited
+  insight 018's title, "CfC's smoothing actively hurts fast control", as
+  rationale for choosing the delay organelle. An adversarial review of the
+  research corpus found that sentence is mis-scoped: 018's CfC arm ran on
+  `ltc_dynamics`, whose gate is structurally confined to `(0.269, 0.5)`, so the
+  arm was pinned in a corner of mixing space no canonical CfC occupies. The
+  ranking 018 measured stands as a fact about the artifact it tested; it is not
+  a characterisation of CfC, and this changelog should not have leaned on it as
+  one. The organelle design does not depend on that sentence, but the citation
+  was doing work it could not carry.
+
 ## [2.3.0]
 
 The memory organelle 2.2.0 introduced can now be reached by evolution rather

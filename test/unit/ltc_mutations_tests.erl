@@ -115,8 +115,10 @@ mutate_time_constant_no_ltc_test() ->
         genotype:construct_Agent(SpecieId, AgentId, Constraint),
 
         %% By default, all neurons are standard
+        %% no_tau_neurons, not no_ltc_neurons: the selector now spans every type
+        %% carrying a time constant, the leaky organelle included.
         Result = ltc_mutations:mutate_time_constant(AgentId),
-        ?assertEqual({error, no_ltc_neurons}, Result)
+        ?assertEqual({error, no_tau_neurons}, Result)
     after
         genotype:reset_db(),
         application:stop(mnesia)

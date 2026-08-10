@@ -21,6 +21,7 @@
     add_inlink/1,
     add_neuron/1,
     add_delay/1,
+    add_leaky/1,
     outsplice/1,
     add_sensorlink/1,
     add_actuatorlink/1,
@@ -34,6 +35,7 @@
     add_inlink/1,
     add_neuron/1,
     add_delay/1,
+    add_leaky/1,
     outsplice/1,
     add_sensorlink/1,
     add_actuatorlink/1,
@@ -297,32 +299,33 @@ add_delay(AgentId) ->
         {error, no_links} ->
             {error, cannot_add_delay};
         {FromId, ToId, Weight} ->
-            insert_delay(Agent, Cortex, FromId, ToId, Weight)
+            insert_organelle(Agent, Cortex, FromId, ToId, Weight, delay, 1.0)
     end.
 
-insert_delay(Agent, Cortex, FromId, ToId, Weight) ->
+insert_organelle(Agent, Cortex, FromId, ToId, Weight, Type, Tau) ->
     NewLayer = (layer_of(FromId) + layer_of(ToId)) / 2,
-    DelayId = {{NewLayer, genotype:generate_UniqueId()}, neuron},
+    OrganelleId = {{NewLayer, genotype:generate_UniqueId()}, neuron},
     {NodeInnovation, _In, _Out} = innovation:get_or_create_node_innovation(FromId, ToId),
     Unity = unity_like(Weight),
-    Delay = #neuron{
-        id = DelayId,
+    Organelle = #neuron{
+        id = OrganelleId,
         generation = Agent#agent.generation,
         cx_id = Agent#agent.cx_id,
         %% linear, because the evaluator applies no activation to a delay and a
         %% stored af would suggest otherwise to anything reading the genotype.
         af = linear,
         aggr_f = dot_product,
-        neuron_type = delay,
+        neuron_type = Type,
+        time_constant = Tau,
         input_idps = [{FromId, [Unity]}],
         output_ids = [ToId],
         ro_ids = [],
         innovation = NodeInnovation
     },
-    mutation_helpers:update_source_output(FromId, ToId, DelayId),
-    mutation_helpers:update_target_input(ToId, FromId, DelayId, Weight),
-    genotype:write(Delay),
-    genotype:write(Cortex#cortex{neuron_ids = [DelayId | Cortex#cortex.neuron_ids]}),
+    mutation_helpers:update_source_output(FromId, ToId, OrganelleId),
+    mutation_helpers:update_target_input(ToId, FromId, OrganelleId, Weight),
+    genotype:write(Organelle),
+    genotype:write(Cortex#cortex{neuron_ids = [OrganelleId | Cortex#cortex.neuron_ids]}),
     ok.
 
 %% A weight is {W, DeltaWeight, LearningRate, ParamList}, always. Build a unit
@@ -331,6 +334,51 @@ insert_delay(Agent, Cortex, FromId, ToId, Weight) ->
 %% being frozen. No catch-all clause: dialyzer proves the shape, and a fallback
 %% would be defensive code for a state that cannot occur.
 unity_like({_W, Delta, Lr, Params}) -> {1.0, Delta, Lr, Params}.
+
+%% @doc Splice a LEAKY INTEGRATOR into an existing connection.
+%%
+%% The other organelle. Where a delay holds a value for exactly one tick, a
+%% leaky integrator moves its state toward its input by one part in tau each
+%% tick, so it carries a decaying trace rather than a discrete memory. It reads
+%% this tick's inputs, so unlike a delay it is ordered normally and does NOT
+%% break a cycle.
+%%
+%% The time constant is drawn from the same range create_cfc_feedforward uses
+%% for tau, [0.1, 2.0], and it is an ordinary genotype field, so
+%% mutate_time_constant perturbs it like any other. That is what makes this an
+%% EVOLVABLE organelle rather than a fixed one: placement is chosen by this
+%% operator and the constant is then tuned by the machinery that already exists.
+%%
+%% ⚠ tau below 1.0 OVERSHOOTS rather than smoothing, since the update moves the
+%% state more than the whole way to its input. That is a real part of the
+%% parameter's range and is deliberately not clamped away; what is refused, in
+%% genotype_to_dag, is a tau of zero or less, which the update cannot evaluate
+%% at all.
+%%
+%% Weights follow add_delay's reasoning, not add_neuron's: unity in, the
+%% original weight on the link out, so the mutation adds a dynamic and does not
+%% also change the path gain.
+%%
+%% Like add_delay, deliberately absent from the default operator list. The
+%% process phenotype has no leaky process and raises rather than running one as
+%% an ordinary neuron.
+%%
+%% @param AgentId the agent to mutate
+%% @returns ok or {error, term()}
+-spec add_leaky(term()) -> ok | {error, term()}.
+add_leaky(AgentId) ->
+    Agent = genotype:dirty_read({agent, AgentId}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    case mutation_helpers:find_splittable_link(AgentId) of
+        {error, no_links} ->
+            {error, cannot_add_leaky};
+        {FromId, ToId, Weight} ->
+            insert_organelle(Agent, Cortex, FromId, ToId, Weight, leaky, drawn_tau())
+    end.
+
+%% Same range as network_evaluator:create_cfc_feedforward/5 draws for tau, so an
+%% organelle and a CfC neuron start life in the same regime.
+drawn_tau() -> 0.1 + genotype_rand:uniform() * 1.9.
 
 %% @doc Add neuron by outsplicing (split output connection).
 %%

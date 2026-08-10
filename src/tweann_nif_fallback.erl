@@ -79,7 +79,9 @@ compile_network(Nodes, InputCount, OutputIndices) ->
         input_count => InputCount,
         output_indices => OutputIndices,
         node_list => Nodes,
-        delay_indices => [Idx || {Idx, delay, _, _, _} <- Nodes]
+        %% Every STATEFUL node, ascending, whatever kind. This is the layout of
+        %% the state vector and it must match the native side's.
+        stateful_indices => [Idx || {Idx, Type, _, _, _} <- Nodes, is_stateful(Type)]
     }.
 
 %% @doc Evaluate network with inputs, starting from zeroed memory.
@@ -105,31 +107,75 @@ evaluate(Network, Inputs) ->
 %% lists rather than being padded.
 -spec evaluate_with_state(map(), [float()], [float()]) -> {[float()], [float()]}.
 evaluate_with_state(#{input_count := InputCount, output_indices := OutputIndices,
-                      node_list := NodeList, delay_indices := DelayIdx},
+                      node_list := NodeList, stateful_indices := StatefulIdx},
                     Inputs, State) ->
-    case {length(Inputs), State =:= [] orelse length(State) =:= length(DelayIdx)} of
+    case {length(Inputs), State =:= [] orelse length(State) =:= length(StatefulIdx)} of
         {InputCount, true} ->
-            stateful(InputCount, OutputIndices, NodeList, DelayIdx, Inputs, State);
+            stateful(InputCount, OutputIndices, NodeList, StatefulIdx, Inputs, State);
         _ ->
             {[], []}
     end;
 evaluate_with_state(_, _, _) ->
     {[], []}.
 
-stateful(InputCount, OutputIndices, NodeList, DelayIdx, Inputs, State) ->
+stateful(InputCount, OutputIndices, NodeList, StatefulIdx, Inputs, State) ->
     Init = maps:from_list(lists:zip(lists:seq(0, InputCount - 1), Inputs)),
-    Held = case State of
-        [] -> [{I, 0.0} || I <- DelayIdx];
-        _ -> lists:zip(DelayIdx, State)
-    end,
-    %% Pass 1: emit
-    Emitted = lists:foldl(fun({I, V}, Acc) -> maps:put(I, V, Acc) end, Init, Held),
-    %% Pass 2: forward, delays skipped
-    Values = lists:foldl(fun evaluate_node/2, Emitted, NodeList),
-    %% Pass 3: capture
     ByIdx = maps:from_list([{I, N} || {I, _, _, _, _} = N <- NodeList]),
-    Next = [captured(maps:get(I, ByIdx), Values) || I <- DelayIdx],
+    Held = case State of
+        [] -> maps:from_list([{I, 0.0} || I <- StatefulIdx]);
+        _ -> maps:from_list(lists:zip(StatefulIdx, State))
+    end,
+    %% Pass 1: emit. Only a delay, whose output does not depend on this tick.
+    Delays = [I || I <- StatefulIdx, element(2, maps:get(I, ByIdx)) =:= delay],
+    Emitted = lists:foldl(fun(I, Acc) -> maps:put(I, maps:get(I, Held), Acc) end,
+                          Init, Delays),
+    %% Pass 2: forward. A leaky integrator updates here, reading this tick's
+    %% inputs; a delay is skipped, having already emitted.
+    {Values, Updated} = lists:foldl(
+        fun(Node, Acc) -> forward_node(Node, Held, Acc) end,
+        {Emitted, #{}},
+        NodeList),
+    %% Pass 3: capture. A delay stores the weighted sum of its inputs, which may
+    %% name nodes that come after it.
+    Captured = lists:foldl(
+        fun(I, Acc) -> maps:put(I, captured(maps:get(I, ByIdx), Values), Acc) end,
+        Updated, Delays),
+    Next = [maps:get(I, Captured, maps:get(I, Held)) || I <- StatefulIdx],
     {[maps:get(Idx, Values, 0.0) || Idx <- OutputIndices], Next}.
+
+forward_node({_Idx, input, _Act, _Bias, _Conns}, _Held, Acc) ->
+    Acc;
+forward_node({_Idx, delay, _Act, _Bias, _Conns}, _Held, Acc) ->
+    Acc;
+forward_node({Idx, {leaky, Tau}, _Act, Bias, Conns}, Held, {Values, Updated}) ->
+    Sum = weighted(Conns, Values, Bias),
+    Prev = maps:get(Idx, Held, 0.0),
+    New = Prev + (Sum - Prev) / Tau,
+    {maps:put(Idx, New, Values), maps:put(Idx, New, Updated)};
+forward_node({Idx, {cfc, Tau, Bound}, _Act, Bias, Conns}, Held, {Values, Updated}) ->
+    %% The same evaluate_cfc/4 this module exposes, so a CfC neuron computes one
+    %% thing whichever way it is reached. No activation on top; the state is the
+    %% output, as it is there.
+    Sum = weighted(Conns, Values, Bias),
+    {NewState, Out} = evaluate_cfc(Sum, maps:get(Idx, Held, 0.0), Tau, Bound),
+    {maps:put(Idx, Out, Values), maps:put(Idx, NewState, Updated)};
+forward_node({Idx, _Type, Act, Bias, Conns}, _Held, {Values, Updated}) ->
+    Sum = weighted(Conns, Values, Bias),
+    {maps:put(Idx, apply_activation(Act, Sum), Values), Updated}.
+
+weighted(Connections, Values, Bias) ->
+    lists:foldl(
+        fun({FromIdx, Weight}, S) -> S + maps:get(FromIdx, Values, 0.0) * Weight end,
+        Bias,
+        Connections
+    ).
+
+%% ⚠ MUST match the native decode_kind. A type slot is either a bare atom or a
+%% tagged tuple carrying the organelle's parameters.
+is_stateful(delay) -> true;
+is_stateful({leaky, _Tau}) -> true;
+is_stateful({cfc, _Tau, _Bound}) -> true;
+is_stateful(_) -> false.
 
 %% Pass 3. What a delay organelle stores for the next tick: the weighted sum of
 %% its inputs plus its bias, with no activation applied. Its sources may name
@@ -140,25 +186,6 @@ captured({_Idx, _Type, _Act, Bias, Connections}, Values) ->
         Bias,
         Connections
     ).
-
-%% @private Compute a single node's activation and store it in the accumulator.
-evaluate_node({_Idx, input, _Activation, _Bias, _Connections}, Acc) ->
-    Acc;  %% Already initialized
-evaluate_node({_Idx, delay, _Activation, _Bias, _Connections}, Acc) ->
-    Acc;  %% Emitted in pass 1, captured in pass 3, and never activated
-evaluate_node({Idx, _Type, Activation, Bias, Connections}, Acc) ->
-    %% Compute weighted sum
-    Sum = lists:foldl(
-        fun({FromIdx, Weight}, S) ->
-            FromVal = maps:get(FromIdx, Acc, 0.0),
-            S + FromVal * Weight
-        end,
-        Bias,
-        Connections
-    ),
-    %% Apply activation
-    Output = apply_activation(Activation, Sum),
-    maps:put(Idx, Output, Acc).
 
 %% @doc Batch evaluate network.
 -spec evaluate_batch(map(), [[float()]]) -> [[float()]].
@@ -250,17 +277,41 @@ flatten_weights(WeightedInputs) ->
 %%==============================================================================
 
 %% @doc Evaluate CfC (closed-form continuous-time) neuron.
+%%
+%% ⚠ THIS DISCARDED TAU. It bound the argument as `_Tau' and never read it, so a
+%% liquid TIME-CONSTANT neuron's time constant did nothing on this path, and it
+%% also used a different backbone and returned tanh(state) rather than the state.
+%% Against the native implementation on the same inputs it diverged by up to
+%% 0.36, which is not rounding.
+%%
+%% That matters beyond this function. network_evaluator:evaluate_with_state/2
+%% routes CfC through tweann_nif:evaluate_cfc/4, so a CfC network computed a
+%% different function depending on whether the native library had loaded, and
+%% nothing said so. An adversarial review of the research corpus found the same
+%% seam there: the CfC-bearing insights from 024 onward ran on this bridge and
+%% their raw feeds record no implementation, so which dynamics produced them had
+%% to be inferred from the data rather than read off the record.
+%%
+%% The native implementation is now the reference and this mirrors it exactly:
+%% f = input / max(tau, 0.001), h = tanh(input), gate = sigmoid(-f), state
+%% clamped to the bound, and the OUTPUT IS THE STATE.
 -spec evaluate_cfc(float(), float(), float(), float()) -> {float(), float()}.
-evaluate_cfc(Input, State, _Tau, Bound) ->
-    %% CfC closed-form: x_new = sigma(-f) * x + (1 - sigma(-f)) * h
-    %% Simplified: use tanh for backbone, linear for head
-    F = math:tanh(Input),
-    H = Input,
+evaluate_cfc(Input, State, Tau, Bound) ->
+    F = cfc_backbone(Input, Tau),
+    H = math:tanh(Input),
+    NewState = cfc_step(State, F, H, Bound),
+    {NewState, NewState}.
+
+%% @private The reference backbone in simple mode, matching compute_backbone in
+%% native/faber_nn_nifs/src/lib.rs. The floor on tau is the native max(0.001),
+%% carried across so a tiny tau behaves identically on both paths rather than
+%% dividing by zero on one of them.
+cfc_backbone(Input, Tau) -> Input / max(Tau, 0.001).
+
+%% @private The gate and the clamp, shared so the two callers here cannot drift.
+cfc_step(State, F, H, Bound) ->
     SigNegF = sigmoid(-F),
-    NewState = SigNegF * State + (1 - SigNegF) * H,
-    ClampedState = clamp(NewState, -Bound, Bound),
-    Output = math:tanh(ClampedState),
-    {ClampedState, Output}.
+    clamp(SigNegF * State + (1 - SigNegF) * H, -Bound, Bound).
 
 %% @doc Evaluate CfC with custom weights.
 -spec evaluate_cfc_with_weights(float(), float(), float(), float(), [float()], [float()]) ->
@@ -343,11 +394,12 @@ pop_step_one({W1, B1, W2, B2, Taus}, State, In, Bound) ->
     Outputs = [math:tanh(pop_dot(Wk, Hidden) + Bk) || {Wk, Bk} <- lists:zip(W2, B2)],
     {Outputs, Hidden}.
 
-%% Mirrors this module's evaluate_cfc/4 (F=tanh(sum), H=sum, out=new_state).
-pop_cfc_neuron(W, B, In, State, _Tau, Bound) ->
+%% Mirrors this module's evaluate_cfc/4, which now mirrors the native reference.
+%% ⚠ This discarded tau for the same reason evaluate_cfc/4 did, so a whole
+%% population evaluated here ignored every time constant it was given.
+pop_cfc_neuron(W, B, In, State, Tau, Bound) ->
     Sum = pop_dot(W, In) + B,
-    SigNegF = sigmoid(-math:tanh(Sum)),
-    clamp(SigNegF * State + (1 - SigNegF) * Sum, -Bound, Bound).
+    cfc_step(State, cfc_backbone(Sum, Tau), math:tanh(Sum), Bound).
 
 pop_dot(W, X) -> lists:sum(lists:zipwith(fun(A, Bb) -> A * Bb end, W, X)).
 
@@ -715,8 +767,36 @@ apply_activation(absolute, X) -> float(functions:absolute(X));
 apply_activation(sqrt, X) -> float(functions:sqrt(X));
 apply_activation(log, X) -> float(functions:log(X)).
 
-%% @private Sigmoid function.
-sigmoid(X) -> 1.0 / (1.0 + math:exp(-X)).
+%% @private Sigmoid, in the numerically stable form.
+%%
+%% ⚠ The naive 1/(1+exp(-X)) RAISES on this VM for large negative X, because
+%% math:exp/1 errors on overflow where Rust's f64::exp returns infinity and
+%% carries on to give 0.0. That is a divergence with a crash on one side, and it
+%% is reachable: a CfC backbone is input/tau, so a small tau and an ordinary
+%% input reach the thousands. Found by sweeping tau down to the native floor of
+%% 0.001 while checking the two implementations against each other.
+%%
+%% Branching on the sign keeps every exponent negative, so neither side of the
+%% branch can overflow.
+%%
+%% ⚠⚠ THE CLAMP TO [-10, 10] IS NOT A SAFETY MEASURE HERE, IT IS FIDELITY. The
+%% stable form above cannot overflow, so this function needs no clamp of its
+%% own. The NATIVE sigmoid clamps, and it is the reference, so this one clamps
+%% identically or the two disagree by 7.6e-5 at a CfC backbone of 2000, which a
+%% tau of 0.001 reaches from an ordinary input.
+%%
+%% ⚠ And the clamp DOES distort: it floors the gate at 4.54e-5 and ceilings it
+%% at 1 - 4.54e-5, so a saturated CfC neuron retains a sliver of its old state
+%% that the mathematics says it should not. That is the same class of thing as
+%% ltc_dynamics' double sigmoid, a numerical guard quietly changing the
+%% function. It is mirrored rather than fixed because insights 024 through 048
+%% were measured on the native path with the clamp in place, and removing it
+%% would make their numbers unreproducible. Recorded in ROADMAP item 9 as a
+%% decision that is owed, not as something settled.
+sigmoid(X) -> stable_sigmoid(max(-10.0, min(10.0, X))).
+
+stable_sigmoid(X) when X >= 0.0 -> 1.0 / (1.0 + math:exp(-X));
+stable_sigmoid(X) -> E = math:exp(X), E / (1.0 + E).
 
 %% @private Clamp value to range.
 clamp(X, Min, Max) -> max(Min, min(Max, X)).

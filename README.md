@@ -88,14 +88,21 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
   layers, and `genotype_to_dag:compile/1` for any acyclic topology at all,
   through the Rust DAG evaluator. Both convert faithfully or refuse with a
   reason; neither approximates
-- **Memory as an organelle**: a neuron typed `delay` emits what it captured last
-  tick, so it adds no ordering constraint and **a feedback path through one is
-  not a cycle**. Evaluate with `tweann_nif:evaluate_with_state/3`, which carries
-  one float per organelle rather than one per neuron, and `add_delay`
-  splices one into an existing connection so evolution can discover memory
-  rather than only run memory somebody authored. Opt in per constraint: a delay
-  runs on the DAG path only, and the process phenotype raises on one rather than
-  evaluating it as an ordinary neuron
+- **Memory on the DAG path**, in three kinds, evaluated with
+  `tweann_nif:evaluate_with_state/3` and carrying one float of state per
+  stateful node rather than one per neuron:
+  - `delay` emits what it captured last tick and applies no activation, so it
+    adds no ordering constraint and **a feedback path through one is not a
+    cycle**
+  - `leaky` moves its state toward its input by one part in `time_constant` each
+    tick; it reads this tick's inputs, so it is ordered normally
+  - `cfc` is the closed-form continuous-time neuron, computing exactly what
+    `tweann_nif:evaluate_cfc/4` computes
+- **Evolution introduces them**: `add_delay` and `add_leaky` splice an organelle
+  into an existing connection, and `mutate_time_constant` tunes a leaky
+  organelle's tau. Opt in per constraint: organelles run on the DAG path only,
+  and the process phenotype raises on one rather than evaluating it as an
+  ordinary neuron
 
 ### LTC/CfC Neurons
 - **Temporal Memory**: Neurons maintain persistent internal state

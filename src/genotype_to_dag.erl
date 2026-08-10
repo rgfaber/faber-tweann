@@ -31,9 +31,22 @@
 %%% back into A converts, sorts and evaluates. A cycle that does NOT pass
 %%% through a delay is still refused, because that one really has no order.
 %%%
-%%% ⚠⚠ CfC and LTC neurons are still refused. Their dynamics are a per-neuron
-%%% continuous-time update, which is a different thing from a unit delay, and
-%%% converting one into the other would be an approximation reported as success.
+%%% The other organelle is LEAKY: its state moves toward its input by one part
+%%% in time_constant each tick and the state is the output. It reads this tick's
+%%% inputs, so unlike a delay it is ordered normally and does NOT break a cycle.
+%%% A chain of delays gives discrete memory; a leaky integrator gives a decaying
+%%% trace, and the two are different tools.
+%%%
+%%% CFC is supported too, and getting here took a detour worth recording. There
+%%% were THREE implementations of the CfC update in this package, disagreeing by
+%%% up to 0.36 on the same inputs: ltc_dynamics (the process phenotype), the Rust
+%%% NIF, and tweann_nif_fallback, which discarded tau entirely. Putting CfC on
+%%% this path before that was settled would have meant choosing one of the three
+%%% by accident. The native implementation is now the reference and the fallback
+%%% mirrors it exactly; this path uses that one.
+%%%
+%%% ⚠ LTC proper is still refused. Its update is an Euler step and needs a dt
+%%% that nothing in the genotype carries, so a value would have to be invented.
 %%%
 %%% ==========================================================================
 %%% THE CONTRACT, WHICH IS TIGHTER THAN THE SPEC SUGGESTS
@@ -86,6 +99,7 @@
 -type why() ::
     {cyclic, [term()]}
     | {unsupported_neuron_type, atom()}
+    | {non_positive_time_constant, term()}
     | {unknown_source, term(), term()}
     | {weight_count_mismatch, term(), non_neg_integer(), non_neg_integer()}
     | no_neurons.
@@ -155,15 +169,20 @@ index_of(InputSlots, Ordered, InputCount) ->
         lists:zip(Ordered, lists:seq(InputCount, InputCount + length(Ordered) - 1))
     ).
 
-neuron_node(#neuron{input_idps = Idps, af = Af, neuron_type = Type} = N, Index) ->
+neuron_node(#neuron{input_idps = Idps, af = Af} = N, Index) ->
     Self = maps:get(N#neuron.id, Index),
     Conns = lists:append([connections(Idp, N, Index) || Idp <- Idps]),
-    {Self, wire_type(Type), Af, bias_of(Idps), Conns}.
+    {Self, wire_type(N), Af, bias_of(Idps), Conns}.
 
-%% The evaluators special-case exactly two type atoms, input and delay, and
-%% treat everything else as an ordinary node.
-wire_type(delay) -> delay;
-wire_type(_) -> neuron.
+%% The type slot is either a bare atom or a tagged tuple carrying the
+%% organelle's parameters. Keeping the parameters inside the type rather than
+%% adding a sixth tuple element is what let the organelles arrive without
+%% breaking every caller of compile_network/3.
+wire_type(#neuron{neuron_type = delay}) -> delay;
+wire_type(#neuron{neuron_type = leaky, time_constant = Tau}) -> {leaky, float(Tau)};
+wire_type(#neuron{neuron_type = cfc, time_constant = Tau, state_bound = Bound}) ->
+    {cfc, float(Tau), float(Bound)};
+wire_type(#neuron{}) -> neuron.
 
 connections({bias, _}, _N, _Index) ->
     [];
@@ -241,9 +260,20 @@ kahn(Deps, ById, Pending, Acc) ->
 %% compile_network/3 has no per-node state, so a neuron whose behaviour depends
 %% on carrying state between evaluations cannot be represented here.
 every_type_supported(Neurons) ->
-    case lists:usort([N#neuron.neuron_type || N <- Neurons]) -- [standard, delay] of
+    case lists:usort([N#neuron.neuron_type || N <- Neurons]) -- [standard, delay, leaky, cfc] of
         [] -> ok;
         [Bad | _] -> refuse({unsupported_neuron_type, Bad})
+    end,
+    %% A leaky integrator divides by its time constant. Zero or negative is a
+    %% genotype this evaluator cannot run, and both implementations refuse it,
+    %% so it is caught here with a reason rather than as a bad argument from a
+    %% NIF.
+    case [N#neuron.id || N <- Neurons,
+                         lists:member(N#neuron.neuron_type, [leaky, cfc]),
+                         not (is_number(N#neuron.time_constant)
+                              andalso N#neuron.time_constant > 0)] of
+        [] -> ok;
+        [Id | _] -> refuse({non_positive_time_constant, Id})
     end.
 
 %% The four properties both evaluators assume and neither checks. Asserted here
