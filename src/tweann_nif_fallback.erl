@@ -635,17 +635,43 @@ perturb_or_replace(Weight, PerturbRate, PerturbStrength) ->
 %%==============================================================================
 
 %% @private Apply activation function.
-apply_activation(tanh, X) -> math:tanh(X);
-apply_activation(sigmoid, X) -> sigmoid(X);
-apply_activation(relu, X) -> max(0.0, X);
-apply_activation(linear, X) -> X;
-apply_activation(sin, X) -> math:sin(X);
-apply_activation(cos, X) -> math:cos(X);
-apply_activation(abs, X) -> abs(X);
-apply_activation(sgn, X) when X > 0 -> 1.0;
-apply_activation(sgn, X) when X < 0 -> -1.0;
-apply_activation(sgn, _X) -> 0.0;
-apply_activation(_, X) -> X.  %% Default to linear
+%%
+%% ⚠ THIS LIST MUST MATCH THE NATIVE ONE. It did not, and the two disagreed
+%% silently on ten of the seventeen activations a genotype can carry.
+%%
+%% The native Activation::from_atom knows tanh, sigmoid, sigmoid1, sin, cos,
+%% gaussian, linear, relu, sgn, bin, trinary, multiquadric, quadratic, cubic,
+%% absolute, sqrt and log. This clause list knew eight of them, spelled one of
+%% them differently (abs against the genotype layer's absolute), and ended in a
+%% catch-all returning the input unchanged. So gaussian computed a gaussian on
+%% the native path and a straight line here, and the two catch-alls did not even
+%% agree with each other: unknown became tanh natively and linear here.
+%%
+%% Both halves now delegate to the same source of truth. functions implements
+%% every one of the seventeen, and several of them return integers (sgn, bin,
+%% trinary), so the result is floated to match the [float()] this module
+%% promises.
+%%
+%% There is deliberately NO catch-all. An activation neither side knows is a
+%% genotype from an incompatible build, and the two implementations cannot agree
+%% on what it means, so neither should guess.
+apply_activation(tanh, X) -> float(functions:tanh(X));
+apply_activation(sigmoid, X) -> float(functions:sigmoid(X));
+apply_activation(sigmoid1, X) -> float(functions:sigmoid1(X));
+apply_activation(sin, X) -> float(functions:sin(X));
+apply_activation(cos, X) -> float(functions:cos(X));
+apply_activation(gaussian, X) -> float(functions:gaussian(X));
+apply_activation(linear, X) -> float(functions:linear(X));
+apply_activation(relu, X) -> float(functions:relu(X));
+apply_activation(sgn, X) -> float(functions:sgn(X));
+apply_activation(bin, X) -> float(functions:bin(X));
+apply_activation(trinary, X) -> float(functions:trinary(X));
+apply_activation(multiquadric, X) -> float(functions:multiquadric(X));
+apply_activation(quadratic, X) -> float(functions:quadratic(X));
+apply_activation(cubic, X) -> float(functions:cubic(X));
+apply_activation(absolute, X) -> float(functions:absolute(X));
+apply_activation(sqrt, X) -> float(functions:sqrt(X));
+apply_activation(log, X) -> float(functions:log(X)).
 
 %% @private Sigmoid function.
 sigmoid(X) -> 1.0 / (1.0 + math:exp(-X)).

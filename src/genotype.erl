@@ -473,7 +473,7 @@ delete_cortex_components(Cortex) ->
 %% @doc Generate a unique float identifier.
 -spec generate_UniqueId() -> float().
 generate_UniqueId() ->
-    rand:uniform().
+    genotype_rand:uniform().
 
 %% @doc Generate an ID for a specific element type.
 %%
@@ -501,7 +501,7 @@ generate_id(agent) ->
 %% @doc Select a random element from a list.
 -spec random_element([T]) -> T when T :: term().
 random_element(List) ->
-    lists:nth(rand:uniform(length(List)), List).
+    genotype_rand:element_of(List).
 
 %% @doc Update agent fingerprint for speciation.
 %%
@@ -547,7 +547,7 @@ create_InputIdPs([{Id, VL} | Rest], Acc) ->
 
 %% Create neural weights in DXNN2 format
 create_neural_weights(VL) ->
-    [{rand:uniform() * 2 - 1, 0.0, 0.1, []} || _ <- lists:seq(1, VL)].
+    [{genotype_rand:uniform() * 2 - 1, 0.0, 0.1, []} || _ <- lists:seq(1, VL)].
 
 %% Calculate recurrent output IDs
 %% Note: Currently called with empty list during initial construction.

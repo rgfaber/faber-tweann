@@ -102,7 +102,7 @@ perturb_time_constant(NeuronId, PerturbRange) ->
     Neuron = genotype:dirty_read({neuron, NeuronId}),
     CurrentTau = Neuron#neuron.time_constant,
     %% Perturb multiplicatively to keep positive
-    Delta = (rand:uniform() - 0.5) * PerturbRange,
+    Delta = (genotype_rand:uniform() - 0.5) * PerturbRange,
     NewTau = clamp(CurrentTau * (1.0 + Delta), 0.001, 100.0),
     UpdatedNeuron = Neuron#neuron{time_constant = NewTau},
     genotype:write(UpdatedNeuron),
@@ -131,7 +131,7 @@ perturb_state_bound(NeuronId, PerturbRange) ->
     Neuron = genotype:dirty_read({neuron, NeuronId}),
     CurrentBound = Neuron#neuron.state_bound,
     %% Perturb multiplicatively to keep positive
-    Delta = (rand:uniform() - 0.5) * PerturbRange,
+    Delta = (genotype_rand:uniform() - 0.5) * PerturbRange,
     NewBound = clamp(CurrentBound * (1.0 + Delta), 0.1, 10.0),
     UpdatedNeuron = Neuron#neuron{state_bound = NewBound},
     genotype:write(UpdatedNeuron),

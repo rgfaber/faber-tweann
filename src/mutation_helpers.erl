@@ -226,7 +226,7 @@ update_neuron_input(Neuron, OldFromId, NewFromId, Weight) ->
 %% @doc Create a random weight tuple.
 -spec create_random_weight() -> {float(), float(), float(), []}.
 create_random_weight() ->
-    {rand:uniform() - 0.5, 0.0, 0.1, []}.
+    {genotype_rand:uniform() - 0.5, 0.0, 0.1, []}.
 
 %% @doc Get weight of a link between two elements.
 -spec get_link_weight(term(), term()) -> {float(), float(), float(), list()}.
@@ -279,6 +279,6 @@ get_layer_coord(_) -> 0.5.
 -spec perturb_ltc_weight_list([float()], float()) -> [float()].
 perturb_ltc_weight_list([], _PerturbRange) ->
     %% Initialize with small random weights if empty
-    [rand:uniform() - 0.5, rand:uniform() - 0.5];
+    [genotype_rand:uniform() - 0.5, genotype_rand:uniform() - 0.5];
 perturb_ltc_weight_list(Weights, PerturbRange) ->
-    [W + (rand:uniform() - 0.5) * PerturbRange || W <- Weights].
+    [W + (genotype_rand:uniform() - 0.5) * PerturbRange || W <- Weights].

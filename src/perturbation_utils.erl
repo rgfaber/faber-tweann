@@ -44,7 +44,7 @@
     {float(), float(), float(), list()}.
 perturb_weight({W, DW, LP, LPs}, Spread) ->
     %% Random noise in [-0.5*Spread, 0.5*Spread] plus momentum
-    NewDW = (rand:uniform() - 0.5) * Spread + DW * 0.5,
+    NewDW = (genotype_rand:uniform() - 0.5) * Spread + DW * 0.5,
     NewW = sat(W + NewDW, ?SAT_LIMIT),
     {NewW, NewDW, LP, LPs}.
 

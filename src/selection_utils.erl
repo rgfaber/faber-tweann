@@ -38,10 +38,10 @@ roulette_wheel(WeightedItems) ->
     case TotalWeight of
         0 ->
             %% All zero weights - fall back to random selection
-            {Item, _} = lists:nth(rand:uniform(length(WeightedItems)), WeightedItems),
+            {Item, _} = genotype_rand:element_of(WeightedItems),
             Item;
         _ ->
-            RandomValue = rand:uniform() * TotalWeight,
+            RandomValue = genotype_rand:uniform() * TotalWeight,
             select_by_accumulated_weight(WeightedItems, RandomValue, 0)
     end.
 
@@ -66,7 +66,7 @@ select_by_accumulated_weight([], _, _) ->
 random_select([]) ->
     error({selection_failed, empty_list});
 random_select(Items) ->
-    Index = rand:uniform(length(Items)),
+    Index = genotype_rand:uniform(length(Items)),
     lists:nth(Index, Items).
 
 %% @doc Select element with custom weight function.
