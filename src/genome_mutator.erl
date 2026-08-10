@@ -74,6 +74,12 @@ mutation_dispatch() ->
         add_outlink => fun topological_mutations:add_outlink/1,
         add_inlink => fun topological_mutations:add_inlink/1,
         add_neuron => fun topological_mutations:add_neuron/1,
+        %% ⚠ Deliberately absent from #constraint{}'s default operator list. A
+        %% delay organelle is evaluated by genotype_to_dag and by nothing else,
+        %% and the process-per-neuron phenotype now raises on one rather than
+        %% running it as a standard neuron. Opt in per constraint, for a
+        %% population evaluated through the DAG path.
+        add_delay => fun topological_mutations:add_delay/1,
         outsplice => fun topological_mutations:outsplice/1,
         add_sensorlink => fun topological_mutations:add_sensorlink/1,
         add_actuatorlink => fun topological_mutations:add_actuatorlink/1,

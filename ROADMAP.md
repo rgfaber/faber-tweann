@@ -334,6 +334,18 @@ three places memory can live as none, then wiring, then neuron, with CfC last.
 Insight 023 found that a solver which actually solved a memory task was a pure
 linear chain. A delay organelle is that chain, offered by the substrate.
 
+**`add_delay` landed too**, so evolution can introduce an organelle rather than
+only run one somebody authored. It splices a delay into an existing connection,
+the way `add_neuron` splices a neuron, with the original weight moved to the
+link out and unity on the way in so the mutation costs a tick and does not also
+change the path gain.
+
+⚠ It is deliberately **not** in the default operator list. A delay is evaluated
+by `genotype_to_dag` and by nothing else, and both phenotype builders now RAISE
+on one rather than spawning a standard neuron that would ignore the type, so a
+`population_monitor` run would crash the moment it fired. Opt in per constraint,
+for a population evaluated through the DAG path.
+
 **Not done, and the reason each is separate:**
 
 - **A leaky integrator with an evolvable time constant.** Strictly more
@@ -341,10 +353,6 @@ linear chain. A delay organelle is that chain, offered by the substrate.
   evolvable parameter per organelle and a numeric contract the two
   implementations must match exactly. The state plumbing it needs now exists and
   is held in agreement by a differential test, which is why delay went first.
-- **A mutation operator that adds an organelle.** Today a delay can be authored
-  but evolution has no operator that introduces one, so `genome_mutator` cannot
-  discover memory structurally. That is the step which would make this a TWEANN
-  capability rather than a hand-authoring one.
 - **CfC and LTC on the DAG path.** Still refused. A per-neuron continuous-time
   update is a different thing from a unit delay and mapping one onto the other
   would be an approximation reported as success.

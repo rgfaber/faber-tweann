@@ -191,6 +191,12 @@ spawn_neuron_by_type(Neuron, NeuronId) ->
             spawn_ltc_neuron(Neuron, NeuronId, ltc);
         cfc ->
             spawn_ltc_neuron(Neuron, NeuronId, cfc);
+        delay ->
+            %% ⚠ No delay process exists. See exoself's spawn_neuron_by_type/2
+            %% for the full reasoning; the short form is that falling through to
+            %% the standard neuron would evaluate a memory organelle as ordinary
+            %% arithmetic and say nothing.
+            erlang:error({delay_organelle_has_no_process_phenotype, NeuronId});
         _ ->
             %% Standard neuron (default)
             spawn_standard_neuron(Neuron, NeuronId)

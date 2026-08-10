@@ -20,6 +20,7 @@
     add_outlink/1,
     add_inlink/1,
     add_neuron/1,
+    add_delay/1,
     outsplice/1,
     add_sensorlink/1,
     add_actuatorlink/1,
@@ -32,6 +33,7 @@
     add_outlink/1,
     add_inlink/1,
     add_neuron/1,
+    add_delay/1,
     outsplice/1,
     add_sensorlink/1,
     add_actuatorlink/1,
@@ -248,6 +250,87 @@ insert_neuron(Agent, Cortex, FromId, ToId, Weight) ->
     UpdatedCortex = Cortex#cortex{neuron_ids = NewNeuronIds},
     genotype:write(UpdatedCortex),
     ok.
+
+%% @doc Splice a MEMORY ORGANELLE into an existing connection.
+%%
+%% A to B becomes A to D to B, where D is a neuron whose neuron_type is delay:
+%% it emits what it captured last tick and applies no activation. Chained, these
+%% are a delay line, which is the structure insight 023 found when it dumped the
+%% wiring of a network that had actually solved a memory task: a pure linear
+%% chain, every neuron with exactly one input.
+%%
+%% ==========================================================================
+%% WHY THE WEIGHTS GO WHERE THEY DO
+%% ==========================================================================
+%%
+%% add_neuron/1 splices with the original weight on the new neuron's input and
+%% again on the link out, which squares the path gain. For a delay that would
+%% make the organelle a gain change as well as a delay, and the two effects
+%% would be inseparable afterwards.
+%%
+%% So the delay's input weight is 1.0 and the original weight moves to the link
+%% out. The path gain is preserved exactly and the mutation does one thing: it
+%% costs the signal a tick.
+%%
+%% ==========================================================================
+%% NOT IN THE DEFAULT OPERATOR LIST, AND THIS IS NOT AN OVERSIGHT
+%% ==========================================================================
+%%
+%% A delay is evaluated by genotype_to_dag and by nothing else. The
+%% process-per-neuron phenotype has no delay process, so exoself and constructor
+%% now RAISE on one rather than spawning a standard neuron that would silently
+%% ignore the type. A population driven by population_monitor would therefore
+%% crash the moment this operator fired.
+%%
+%% Add it to a constraint's mutation_operators deliberately, for a population
+%% evaluated through the DAG path. It is a capability the substrate offers and
+%% the process path does not, and pretending otherwise is what the raise
+%% prevents.
+%%
+%% @param AgentId the agent to mutate
+%% @returns ok or {error, term()}
+-spec add_delay(term()) -> ok | {error, term()}.
+add_delay(AgentId) ->
+    Agent = genotype:dirty_read({agent, AgentId}),
+    Cortex = genotype:dirty_read({cortex, Agent#agent.cx_id}),
+    case mutation_helpers:find_splittable_link(AgentId) of
+        {error, no_links} ->
+            {error, cannot_add_delay};
+        {FromId, ToId, Weight} ->
+            insert_delay(Agent, Cortex, FromId, ToId, Weight)
+    end.
+
+insert_delay(Agent, Cortex, FromId, ToId, Weight) ->
+    NewLayer = (layer_of(FromId) + layer_of(ToId)) / 2,
+    DelayId = {{NewLayer, genotype:generate_UniqueId()}, neuron},
+    {NodeInnovation, _In, _Out} = innovation:get_or_create_node_innovation(FromId, ToId),
+    Unity = unity_like(Weight),
+    Delay = #neuron{
+        id = DelayId,
+        generation = Agent#agent.generation,
+        cx_id = Agent#agent.cx_id,
+        %% linear, because the evaluator applies no activation to a delay and a
+        %% stored af would suggest otherwise to anything reading the genotype.
+        af = linear,
+        aggr_f = dot_product,
+        neuron_type = delay,
+        input_idps = [{FromId, [Unity]}],
+        output_ids = [ToId],
+        ro_ids = [],
+        innovation = NodeInnovation
+    },
+    mutation_helpers:update_source_output(FromId, ToId, DelayId),
+    mutation_helpers:update_target_input(ToId, FromId, DelayId, Weight),
+    genotype:write(Delay),
+    genotype:write(Cortex#cortex{neuron_ids = [DelayId | Cortex#cortex.neuron_ids]}),
+    ok.
+
+%% A weight is {W, DeltaWeight, LearningRate, ParamList}, always. Build a unit
+%% weight carrying the same tuning fields as the one it replaces, so the
+%% organelle is perturbed by the same machinery as everything else rather than
+%% being frozen. No catch-all clause: dialyzer proves the shape, and a fallback
+%% would be defensive code for a state that cannot occur.
+unity_like({_W, Delta, Lr, Params}) -> {1.0, Delta, Lr, Params}.
 
 %% @doc Add neuron by outsplicing (split output connection).
 %%
