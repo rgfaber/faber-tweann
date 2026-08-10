@@ -10,6 +10,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - See individual version documents for detailed planning
 
+## [2.3.0]
+
+The memory organelle 2.2.0 introduced can now be reached by evolution rather
+than only by hand. One operator and two guards.
+
+### Added
+
+- **`topological_mutations:add_delay/1`**, and an `add_delay` entry in
+  `genome_mutator`'s operator dispatch. It splices a delay organelle into an
+  existing connection: A to B becomes A to D to B, the way `add_neuron/1`
+  splices an ordinary neuron.
+
+  ⚠ **The weights are arranged differently from `add_neuron/1`, on purpose.**
+  That operator puts the original weight on both the new neuron's input and the
+  link out, which squares the path gain. For a delay that would make the
+  organelle a gain change as well as a delay, and the two would be inseparable
+  afterwards. So unity goes in and the original weight moves to the link out:
+  the mutation costs the signal one tick and changes nothing else.
+
+  This is what makes the delay a TWEANN capability rather than a substrate one.
+  Until now an organelle could be authored into a genotype and flown, but no
+  mutation produced one, so evolution could not discover memory. Insight 023's
+  finding was that evolution builds a delay line when it needs memory, out of
+  ordinary neurons because nothing else was on offer.
+
+  ⚠⚠ **Deliberately NOT in `#constraint{}`'s default operator list**, and a test
+  pins that it stays out. A delay is evaluated by `genotype_to_dag` and by
+  nothing else, so a population driven by `population_monitor` would raise the
+  moment this fired. Add it to a constraint's `mutation_operators` for a
+  population evaluated through the DAG path.
+
+### Fixed
+
+- **Both phenotype builders would have run a delay organelle as an ordinary
+  neuron.** `exoself` and `constructor` each dispatch on `neuron_type`, routing
+  `ltc` and `cfc` to `neuron_ltc` and falling through to a standard neuron for
+  everything else. A `delay` hit that catch-all, so it would have computed an
+  activation of its inputs instead of emitting last tick's value, and the same
+  genotype would have meant one thing there and another under `genotype_to_dag`,
+  silently.
+
+  `exoself`'s own comment on that dispatch says it exists "so the evolutionary
+  path evaluates LTC genotypes as LTC, not as standard neurons that silently
+  ignore their temporal parameters". A delay would have walked into exactly the
+  failure that comment describes.
+
+  Both now raise `{delay_organelle_has_no_process_phenotype, Id}`. The process
+  path expresses the same idea as a recurrent connection, which it already
+  supports and which seeds its target with 0.0 on the first cycle; that or the
+  DAG path are the two honest options, and silently doing neither is not.
+
+### Notes for upgraders
+
+Nothing changes for an existing population. `add_delay` is not in the default
+operator list, so no run reaches the new code unless its constraint asks for it.
+
+If you author a `delay` neuron into a genotype and build a phenotype with
+`constructor:construct/1` or through `population_monitor`, that now raises where
+it previously produced a network computing the wrong function. That is the
+intended direction.
+
 ## [2.2.0]
 
 An evolved topology can now be flown, and a run can be a function of its seed.

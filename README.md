@@ -91,7 +91,11 @@ See the [LTC Neurons Guide](https://hexdocs.pm/faber_tweann/ltc-neurons.html) fo
 - **Memory as an organelle**: a neuron typed `delay` emits what it captured last
   tick, so it adds no ordering constraint and **a feedback path through one is
   not a cycle**. Evaluate with `tweann_nif:evaluate_with_state/3`, which carries
-  one float per organelle rather than one per neuron
+  one float per organelle rather than one per neuron, and `add_delay`
+  splices one into an existing connection so evolution can discover memory
+  rather than only run memory somebody authored. Opt in per constraint: a delay
+  runs on the DAG path only, and the process phenotype raises on one rather than
+  evaluating it as an ordinary neuron
 
 ### LTC/CfC Neurons
 - **Temporal Memory**: Neurons maintain persistent internal state
