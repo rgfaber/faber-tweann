@@ -5,7 +5,7 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/faber_tweann.svg)](https://hex.pm/packages/faber_tweann)
 [![Documentation](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/faber_tweann/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/rgfaber/faber-tweann/blob/master/LICENSE)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://buymeacoffee.com/rlefever)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support-ea4aaa.svg?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/rgfaber)
 
 Evolutionary neural networks that evolve both topology and weights, now with **Liquid Time-Constant (LTC) neurons** for adaptive temporal processing. Based on DXNN2 by Gene Sher.
 
