@@ -11,7 +11,7 @@
   {env,[]},
   {modules, []},
   {licenses, ["Apache-2.0"]},
-  %% GitHub is canonical since 2026-07-26. The Codeberg repository is a
+  %% GitHub is canonical since 2026-07-26. The Codeberg repository was a
   %% soon-to-be-deleted copy and is deliberately not linked: a package whose
   %% only source link 404s is worse than one with a single working link.
   {links, [{"GitHub", "https://github.com/rgfaber/faber-tweann"}]},
