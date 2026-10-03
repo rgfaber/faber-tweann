@@ -364,14 +364,12 @@ crossover_weight_vectors(W1, W2, CrossoverRate) ->
     ),
 
     %% Add remaining weights from longer list
-    Remaining = if
-        length(W1) > NumWeights ->
-            lists:nthtail(NumWeights, W1);
-        length(W2) > NumWeights ->
-            lists:nthtail(NumWeights, W2);
-        true ->
-            []
-    end,
+    Remaining =
+        case {length(W1) > NumWeights, length(W2) > NumWeights} of
+            {true, _} -> lists:nthtail(NumWeights, W1);
+            {false, true} -> lists:nthtail(NumWeights, W2);
+            {false, false} -> []
+        end,
 
     Combined ++ Remaining.
 

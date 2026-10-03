@@ -180,11 +180,8 @@ verify_morphology_module(Module) ->
     HasGetSensors = lists:member({get_sensors, 1}, Exports),
     HasGetActuators = lists:member({get_actuators, 1}, Exports),
 
-    if
-        HasGetSensors andalso HasGetActuators ->
-            ok;
-        not HasGetSensors ->
-            {error, {missing_callback, get_sensors, 1}};
-        not HasGetActuators ->
-            {error, {missing_callback, get_actuators, 1}}
+    case {HasGetSensors, HasGetActuators} of
+        {true, true} -> ok;
+        {false, _} -> {error, {missing_callback, get_sensors, 1}};
+        {true, false} -> {error, {missing_callback, get_actuators, 1}}
     end.

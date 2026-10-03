@@ -235,7 +235,7 @@ actuate(identity, Input, _ScapePid, _Parameters) ->
 actuate(threshold, Input, _ScapePid, Parameters) ->
     %% Binary threshold - convert to 0/1 based on threshold
     Threshold = proplists:get_value(threshold, Parameters, 0.0),
-    [if V > Threshold -> 1.0; true -> 0.0 end || V <- Input];
+    [threshold_value(V, Threshold) || V <- Input];
 
 actuate(softmax, Input, _ScapePid, _Parameters) ->
     %% Softmax - convert to probability distribution
@@ -259,6 +259,10 @@ actuate(scape, Input, undefined, _Parameters) ->
 actuate(_ActuatorName, Input, _ScapePid, _Parameters) ->
     %% Default: pass through
     Input.
+
+%% Binary threshold: 1.0 above the threshold, else 0.0.
+threshold_value(V, Threshold) when V > Threshold -> 1.0;
+threshold_value(_, _) -> 0.0.
 
 %% @private Fold step for argmax: track the running maximum value, the index at
 %% which it occurred, and the current position.

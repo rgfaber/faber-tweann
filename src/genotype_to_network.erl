@@ -226,10 +226,15 @@ one_activation(Which, Neurons, _Fallback) ->
 %% left with undefined metadata and keeps network_evaluator's stateless path.
 with_meta(Net, Layers) ->
     Meta = [[meta(N) || N <- Layer] || Layer <- Layers],
-    case lists:any(fun(L) -> lists:any(fun(#{neuron_type := T}) -> T =:= cfc end, L) end, Meta) of
+    case has_cfc(Meta) of
         true -> network_evaluator:set_neuron_meta(Net, Meta);
         false -> Net
     end.
+
+has_cfc(Meta) ->
+    lists:any(fun(Layer) -> lists:any(fun is_cfc/1, Layer) end, Meta).
+
+is_cfc(#{neuron_type := T}) -> T =:= cfc.
 
 meta(#neuron{neuron_type = T, time_constant = Tau, state_bound = Bound}) ->
     #{neuron_type => T, tau => float(Tau), state_bound => float(Bound)}.
