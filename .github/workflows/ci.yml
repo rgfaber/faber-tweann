@@ -22,7 +22,7 @@ jobs:
         uses: erlef/setup-beam@v1
         with:
           otp-version: "29.0.2"
-          rebar3-version: "3"
+          rebar3-version: "3.27.0"
 
       # The NIFs build from source in a pre_hook (priv/build-nifs.sh);
       # there is no prebuilt artifact fetching.
