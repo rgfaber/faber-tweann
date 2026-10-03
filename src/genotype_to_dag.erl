@@ -281,24 +281,33 @@ every_type_supported(Neurons) ->
 %% implementation and a panic on the other.
 well_formed(Nodes, InputCount) ->
     Count = length(Nodes),
-    Indices = [I || {I, _, _, _, _} <- Nodes],
-    Indices =:= lists:seq(0, Count - 1) orelse erlang:error({dag_not_positional, Indices}),
-    lists:all(fun({I, Type, _, _, _}) -> (Type =:= input) =:= (I < InputCount) end, Nodes)
-        orelse erlang:error(dag_inputs_not_first),
-    lists:all(
-        fun({I, Type, _, _, Conns}) ->
-            Bound = case Type of
-                %% A delay reads its sources a tick late, in pass 3, after every
-                %% ordinary node has run. So they may name anything in range,
-                %% including itself.
-                delay -> Count;
-                _ -> I
-            end,
-            lists:all(fun({From, _}) -> From >= 0 andalso From < Bound end, Conns)
-        end,
-        Nodes
-    ) orelse erlang:error(dag_not_topological),
+    positional(Count, Nodes),
+    inputs_first(InputCount, Nodes),
+    topological(Count, Nodes),
     ok.
+
+positional(Count, Nodes) ->
+    Indices = [I || {I, _, _, _, _} <- Nodes],
+    Indices =:= lists:seq(0, Count - 1) orelse erlang:error({dag_not_positional, Indices}).
+
+inputs_first(InputCount, Nodes) ->
+    lists:all(fun({I, Type, _, _, _}) -> (Type =:= input) =:= (I < InputCount) end, Nodes)
+        orelse erlang:error(dag_inputs_not_first).
+
+topological(Count, Nodes) ->
+    lists:all(fun({I, Type, _, _, Conns}) -> in_range(I, Type, Count, Conns) end, Nodes)
+        orelse erlang:error(dag_not_topological).
+
+%% A delay reads its sources a tick late, in pass 3, after every ordinary
+%% node has run. So they may name anything in range, including itself.
+in_range(I, Type, Count, Conns) ->
+    Bound = bound(Type, Count, I),
+    lists:all(fun(Conn) -> conn_in_range(Conn, Bound) end, Conns).
+
+bound(delay, Count, _I) -> Count;
+bound(_, _Count, I) -> I.
+
+conn_in_range({From, _}, Bound) -> From >= 0 andalso From < Bound.
 
 required(Tag, Id) ->
     case genotype:dirty_read({Tag, Id}) of
